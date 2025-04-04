@@ -1,4 +1,5 @@
 parsons.code-workspace
+.secure/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
