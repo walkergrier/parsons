@@ -43,12 +43,12 @@ class NationBuilder(
         access_token = check_env.check("NB_ACCESS_TOKEN", access_token)
         refresh_token = check_env.check("NB_REFRESH_TOKEN", refresh_token)
 
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        headers.update(NationBuilder.get_auth_headers(access_token))
-
         if 0 < version < 3:
             raise ValueError("invalid version number")
         self.version = int(version)
+
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers.update(NationBuilder.get_auth_headers(access_token))
 
         self.client = NBConnector(NationBuilder.get_uri(slug, version), headers=headers)
 
@@ -139,7 +139,7 @@ class NationBuilder(
     def _to_table(cls, resp):
         return Table(
             [
-                {"id": i["id"], "type": i["type"], **i["attributes"]}
+                {"id": i["id"], "type": i["type"]}.update(i["attributes"])
                 for i in resp.json()["data"]
             ],
         )
@@ -212,11 +212,10 @@ class NationBuilder(
                 "created_at",
             ]
         params = NationBuilder.build_filter_params(filters)
-        params["page_size"] = max(min(int(page_size), 100), 1)
+        params["page_size"] = page_size
 
         resp = self.client.get_request(resource, params)
 
         if all_pages:
             return self._get_all(resp, limit)
-        else:
-            return NationBuilder._to_table(resp)
+        return NationBuilder._to_table(resp)
