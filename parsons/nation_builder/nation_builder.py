@@ -1,8 +1,13 @@
 import json
 import logging
+import re
 import time
+from itertools import chain
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs, urlparse
+
+import yaml
 
 from parsons import Table
 from parsons.utilities import check_env
@@ -217,7 +222,70 @@ class NationBuilderV1:
         return (False, None)
 
 
-class NationBuilderV2:
+class DynamicMethodCreator(type):
+    """
+    A metaclass that dynamically adds methods to a class based on its 'method_configs'.
+    Each configuration dictionary defines a method, where its keys and values
+    become keyword arguments and their default values for the dynamically created method.
+    """
+
+    def __new__(mcs, name, bases, namespace):
+        # Retrieve the list of method configurations from the class's namespace
+        method_configs = namespace.get("method_configs", [])
+
+        # Iterate over each dictionary in the method_configs list
+        for config_dict in method_configs:
+            # Extract the name of the method to be created using "operation_id"
+            method_name = config_dict.get("operation_id")
+            if not method_name:
+                # Skip this configuration if no method name is provided
+                continue
+
+            # Extract default arguments for the new method from the config_dict.
+            # We exclude 'operation_id' as it's the method's name, not an argument.
+            method_defaults = {
+                k: v for k, v in config_dict.items() if k != "operation_id"
+            }
+
+            # Define the function that will become the new method.
+            # This function will accept arbitrary keyword arguments (**runtime_kwargs),
+            # which will override the defaults defined in method_defaults.
+            def _method_template(self, **runtime_kwargs):
+                """
+                A dynamically created method that combines predefined defaults
+                with runtime arguments and calls the resource method.
+
+                Args:
+                    **runtime_kwargs: Any keyword arguments passed when calling this method,
+                                      which will override the defaults.
+                """
+                # Combine the pre-defined defaults with any runtime arguments.
+                # Runtime arguments take precedence, effectively overriding defaults.
+                final_args = {**method_defaults, **runtime_kwargs}
+
+                # Extract 'count' and 'message' from the final combined arguments.
+                # Provide sensible fallbacks if 'count' or 'message' are not present
+                # in either the defaults or the runtime arguments.
+                count = final_args.get("count", 1)  # Default count if not specified
+                message = final_args.get(
+                    "message", "Default dynamic message"
+                )  # Default message if not specified
+
+                self.resource(count, message)
+
+            # Assign a unique name to the dynamically created function.
+            # This is good practice for introspection (e.g., when debugging).
+            _method_template.__name__ = method_name
+
+            # Add the dynamically created function to the class's namespace.
+            # This makes it a callable method of the class being created.
+            namespace[method_name] = _method_template
+
+        # Call the superclass's __new__ method to finalize the class creation process.
+        return super().__new__(mcs, name, bases, namespace)
+
+
+class NationBuilderV2(metaclass=DynamicMethodCreator):
     def __init__(
         self,
         slug: Optional[str] = None,
@@ -237,6 +305,36 @@ class NationBuilderV2:
         self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers)
 
     @classmethod
+    def camel_to_snake(self,name):
+        # Insert an underscore before any uppercase letter that is not at the beginning of the string
+        # and convert the entire string to lowercase.
+        s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+        return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+    # List of dictionaries defining the dynamic methods.
+    # Each dictionary specifies the method 'operation_id' and other key-value pairs
+    # that become default keyword arguments for that method.
+    with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
+        openapi_spec = yaml.safe_load(f)
+
+    method_configs = chain.from_iterable(
+        [
+            [
+                {
+                    "operation_id": self.camel_to_snake(
+                        openapi_spec["paths"][path][j]["operationId"]
+                    ),
+                    "method": j,
+                    "path": path,
+                }
+                for j in openapi_spec["paths"][path]
+                if j != "parameters"
+            ]
+            for path in openapi_spec["paths"]
+        ]
+    )
+
+    @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
         if slug is None:
             raise ValueError("slug can't None")
@@ -247,7 +345,7 @@ class NationBuilderV2:
         if len(slug.strip()) == 0:
             raise ValueError("slug can't be an empty str")
 
-        return f"https://{slug}.nationbuilder.com/api/v2"
+        return f"https://{slug}.nationbuilder.com"
 
     @classmethod
     def get_auth_headers(cls, access_token: Optional[str]) -> Dict[str, str]:
@@ -304,7 +402,7 @@ class NationBuilderV2:
         return params
 
     def validate_resource(self, resource_name: str):
-        vaild_resources = [
+        valid_resources = [
             "async_processes",
             "automation_enrollments",
             "automations",
@@ -344,7 +442,7 @@ class NationBuilderV2:
             "surveys",
             "voters",
         ]
-        if resource_name not in vaild_resources:
+        if resource_name not in valid_resources:
             raise ValueError(f"invalid resource: {resource_name}")
 
     def _field_params(self, resource: str, fields: str | list) -> dict:
@@ -375,7 +473,6 @@ class NationBuilderV2:
         :param per_page: Number of records per page.
         :param all_pages: Whether to fetch all pages.
         """
-        self.validate_resource(resource)
 
         params = self._param_builder("filter", filters)
         params.update(self._field_params(resource=resource, fields=fields))
