@@ -11,7 +11,7 @@ from parsons.utilities.api_connector import APIConnector
 logger = logging.getLogger(__name__)
 
 
-class NationBuilder:
+class NationBuilderV1:
     """
     Instantiate the NationBuilder class
 
@@ -30,9 +30,9 @@ class NationBuilder:
         token = check_env.check("NB_ACCESS_TOKEN", access_token)
 
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        headers.update(NationBuilder.get_auth_headers(token))
+        headers.update(NationBuilderV1.get_auth_headers(token))
 
-        self.client = APIConnector(NationBuilder.get_uri(slug), headers=headers)
+        self.client = APIConnector(NationBuilderV1.get_uri(slug), headers=headers)
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -104,8 +104,8 @@ class NationBuilder:
                 data.extend(res)
 
                 if response.get("next", None):
-                    nonce, token = NationBuilder.parse_next_params(response["next"])
-                    url = NationBuilder.make_next_url(original_url, nonce, token)
+                    nonce, token = NationBuilderV1.parse_next_params(response["next"])
+                    url = NationBuilderV1.make_next_url(original_url, nonce, token)
                 else:
                     break
             except Exception as error:
@@ -215,3 +215,208 @@ class NationBuilder:
                 return (True, response.json())
 
         return (False, None)
+
+
+class NationBuilderV2:
+    def __init__(
+        self,
+        slug: Optional[str] = None,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        redirect_uri: Optional[str] = None,
+    ) -> None:
+        slug = check_env.check("NB_SLUG", slug)
+        token = check_env.check("NB_ACCESS_TOKEN", access_token)
+        refresh_token = check_env.check("NB_REFRESH_TOKEN", refresh_token)
+
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers.update(NationBuilderV2.get_auth_headers(token))
+
+        self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers)
+
+    @classmethod
+    def get_uri(cls, slug: Optional[str]) -> str:
+        if slug is None:
+            raise ValueError("slug can't None")
+
+        if not isinstance(slug, str):
+            raise ValueError("slug must be an str")
+
+        if len(slug.strip()) == 0:
+            raise ValueError("slug can't be an empty str")
+
+        return f"https://{slug}.nationbuilder.com/api/v2"
+
+    @classmethod
+    def get_auth_headers(cls, access_token: Optional[str]) -> Dict[str, str]:
+        if access_token is None:
+            raise ValueError("access_token can't None")
+
+        if not isinstance(access_token, str):
+            raise ValueError("access_token must be an str")
+
+        if len(access_token.strip()) == 0:
+            raise ValueError("access_token can't be an empty str")
+
+        return {"authorization": f"Bearer {access_token}"}
+
+    @classmethod
+    def _to_table(cls, resp):
+        return Table(
+            [
+                {"id": i["id"], "type": i["type"]}.update(i["attributes"])
+                for i in resp.json()["data"]
+            ],
+        )
+
+    def _get_next(self, resp):
+        try:
+            q = urlparse(resp.json()["links"]["next"])
+            resp = self.client.get_request(q.path, params=q.query)
+            return resp
+        except:
+            return None
+
+    def _get_all(self, resp: int, limit: int) -> Table:
+        data = NationBuilderV2._to_table(resp)
+        while limit != 0 and len(data) < limit:
+            resp = self.get_next(resp)
+            if resp is None:
+                break
+            data.stack(NationBuilderV2._to_table(resp))
+        return data
+
+    def _param_builder(self, param_name: str, param_dict: dict) -> dict:
+        """Convert param dictionary into NationBuilder's param format."""
+        if not param_dict:
+            return {}
+
+        params = {}
+        for key, value in param_dict.items():
+            if isinstance(value, dict):  # Handling complex cases
+                params.update(
+                    {f"{param_name}[{key}][{operator}]": val for operator, val in value.items()}
+                )
+            else:  # Simple case
+                params[f"{param_name}[{key}]"] = value
+        return params
+
+    def validate_resource(self, resource_name: str):
+        vaild_resources = [
+            "async_processes",
+            "automation_enrollments",
+            "automations",
+            "ballots",
+            "broadcasters",
+            "contacts",
+            "custom_fields",
+            "donation_tracking_codes",
+            "donations",
+            "elections",
+            "event_rsvps",
+            "event_ticket_levels",
+            "events",
+            "imports",
+            "lists",
+            "mailings",
+            "membership_types",
+            "memberships",
+            "pages",
+            "path_histories",
+            "path_journey_status_changes",
+            "path_journeys",
+            "path_steps",
+            "paths",
+            "petition_signatures",
+            "petitions",
+            "pledges",
+            "precincts",
+            "relationships",
+            "signup_profiles",
+            "signup_taggings",
+            "signup_tags",
+            "signups",
+            "survey_question_possible_responses",
+            "survey_question_responses",
+            "survey_questions",
+            "surveys",
+            "voters",
+        ]
+        if resource_name not in vaild_resources:
+            raise ValueError(f"invalid resource: {resource_name}")
+
+    def _field_params(self, resource: str, fields: str | list) -> dict:
+        if not fields:
+            return {}
+        elif isinstance(fields, str):
+            return {f"fields[{resource}]": fields}
+        elif isinstance(fields, list):
+            return {f"fields[{resource}]": ",".join(fields)}
+        else:
+            raise TypeError("fields should be str or list")
+
+    def get_resource(
+        self,
+        resource: str,
+        filters: dict = None,
+        fields: list = None,
+        sort_by: dict = None,
+        count_results: bool = False,
+        page_size: int = 100,
+        all_pages: bool = False,
+        results_limit: int = 0,
+    ) -> Table:
+        """
+        Generic function to fetch data from any NationBuilder v2 API endpoint.
+        :param resource: API resource (e.g., "people", "donations", "events").
+        :param filters: Dictionary of filters.
+        :param per_page: Number of records per page.
+        :param all_pages: Whether to fetch all pages.
+        """
+        self.validate_resource(resource)
+
+        params = self._param_builder("filter", filters)
+        params.update(self._field_params(resource=resource, fields=fields))
+        if sort_by:
+            params["sort"] = sort_by
+        if count_results or all_pages:
+            params["stats[total]"] = "count"
+        params["page_size"] = min(100, max(1, page_size))
+
+        resp = self.client.get_request(resource, params)
+
+        if all_pages:
+            return self._get_all(resp, results_limit)
+        return NationBuilder._to_table(resp)
+
+
+class NationBuilder:
+    def __new__(
+        cls,
+        slug: Optional[str] = None,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        redirect_uri: Optional[str] = None,
+        parsons_version: str = "v1",
+    ):
+        parsons_version = check_env.check("NB_PARSONS_VERSION", parsons_version)
+        if parsons_version == "v1":
+            logger.info("Consider upgrading to version 2 of the NationBuilder connector!")
+            logger.info(
+                "See docs for more information: https://move-coop.github.io/parsons/html/latest/nation_builder.html"
+            )
+            return NationBuilderV1(slug=slug, access_token=client_id, client_secret=client_secret)
+        if parsons_version == "v2":
+            return NationBuilderV2(
+                slug=slug,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+            )
+        raise ValueError(f"{parsons_version} not supported")
