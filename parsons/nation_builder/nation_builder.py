@@ -271,7 +271,12 @@ class DynamicMethodCreator(type):
                     "message", "Default dynamic message"
                 )  # Default message if not specified
 
-                self.resource(count, message)
+                self.resource(
+                    req_type=final_args.get("req_type"),
+                    url_path=final_args.get("url_path"),
+                    count, 
+                    message,
+                )
 
             # Assign a unique name to the dynamically created function.
             # This is good practice for introspection (e.g., when debugging).
@@ -317,22 +322,22 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
     with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
         openapi_spec = yaml.safe_load(f)
 
-    method_configs = chain.from_iterable(
-        [
+        method_configs = chain.from_iterable(
             [
-                {
-                    "operation_id": self.camel_to_snake(
-                        openapi_spec["paths"][path][j]["operationId"]
-                    ),
-                    "method": j,
-                    "path": path,
-                }
-                for j in openapi_spec["paths"][path]
-                if j != "parameters"
+                [
+                    {
+                        "operation_id": self.camel_to_snake(
+                            openapi_spec["paths"][path][j]["operationId"]
+                        ),
+                        "method": j,
+                        "path": path,
+                    }
+                    for j in openapi_spec["paths"][path]
+                    if j != "parameters"
+                ]
+                for path in openapi_spec["paths"]
             ]
-            for path in openapi_spec["paths"]
-        ]
-    )
+        )
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -377,6 +382,7 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         except:
             return None
 
+    @classmethod
     def _get_all(self, resp: int, limit: int) -> Table:
         data = NationBuilderV2._to_table(resp)
         while limit != 0 and len(data) < limit:
@@ -401,49 +407,6 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
                 params[f"{param_name}[{key}]"] = value
         return params
 
-    def validate_resource(self, resource_name: str):
-        valid_resources = [
-            "async_processes",
-            "automation_enrollments",
-            "automations",
-            "ballots",
-            "broadcasters",
-            "contacts",
-            "custom_fields",
-            "donation_tracking_codes",
-            "donations",
-            "elections",
-            "event_rsvps",
-            "event_ticket_levels",
-            "events",
-            "imports",
-            "lists",
-            "mailings",
-            "membership_types",
-            "memberships",
-            "pages",
-            "path_histories",
-            "path_journey_status_changes",
-            "path_journeys",
-            "path_steps",
-            "paths",
-            "petition_signatures",
-            "petitions",
-            "pledges",
-            "precincts",
-            "relationships",
-            "signup_profiles",
-            "signup_taggings",
-            "signup_tags",
-            "signups",
-            "survey_question_possible_responses",
-            "survey_question_responses",
-            "survey_questions",
-            "surveys",
-            "voters",
-        ]
-        if resource_name not in valid_resources:
-            raise ValueError(f"invalid resource: {resource_name}")
 
     def _field_params(self, resource: str, fields: str | list) -> dict:
         if not fields:
@@ -455,9 +418,12 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         else:
             raise TypeError("fields should be str or list")
 
-    def get_resource(
+    def resource(
         self,
+        req_type: str,
+        url_path: str,
         resource: str,
+        data: dict = None,
         filters: dict = None,
         fields: list = None,
         sort_by: dict = None,
@@ -482,9 +448,14 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
             params["stats[total]"] = "count"
         params["page_size"] = min(100, max(1, page_size))
 
-        resp = self.client.get_request(resource, params)
+        resp = self.client.request(
+            url=url_path,
+            req_type=req_type.upper(),
+            json=data,
+            params=params,
+        )
 
-        if all_pages:
+        if all_pages and req_type.upper() == "GET":
             return self._get_all(resp, results_limit)
         return NationBuilder._to_table(resp)
 
