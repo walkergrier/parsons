@@ -243,9 +243,7 @@ class DynamicMethodCreator(type):
 
             # Extract default arguments for the new method from the config_dict.
             # We exclude 'operation_id' as it's the method's name, not an argument.
-            method_defaults = {
-                k: v for k, v in config_dict.items() if k != "operation_id"
-            }
+            method_defaults = {k: v for k, v in config_dict.items() if k != "operation_id"}
 
             # Define the function that will become the new method.
             # This function will accept arbitrary keyword arguments (**runtime_kwargs),
@@ -257,25 +255,15 @@ class DynamicMethodCreator(type):
 
                 Args:
                     **runtime_kwargs: Any keyword arguments passed when calling this method,
-                                      which will override the defaults.
+                                        which will override the defaults.
                 """
                 # Combine the pre-defined defaults with any runtime arguments.
                 # Runtime arguments take precedence, effectively overriding defaults.
                 final_args = {**method_defaults, **runtime_kwargs}
 
-                # Extract 'count' and 'message' from the final combined arguments.
-                # Provide sensible fallbacks if 'count' or 'message' are not present
-                # in either the defaults or the runtime arguments.
-                count = final_args.get("count", 1)  # Default count if not specified
-                message = final_args.get(
-                    "message", "Default dynamic message"
-                )  # Default message if not specified
-
                 self.resource(
                     req_type=final_args.get("req_type"),
                     url_path=final_args.get("url_path"),
-                    count, 
-                    message,
                 )
 
             # Assign a unique name to the dynamically created function.
@@ -310,36 +298,6 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers)
 
     @classmethod
-    def camel_to_snake(self,name):
-        # Insert an underscore before any uppercase letter that is not at the beginning of the string
-        # and convert the entire string to lowercase.
-        s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
-        return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
-
-    # List of dictionaries defining the dynamic methods.
-    # Each dictionary specifies the method 'operation_id' and other key-value pairs
-    # that become default keyword arguments for that method.
-    with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
-        openapi_spec = yaml.safe_load(f)
-
-        method_configs = chain.from_iterable(
-            [
-                [
-                    {
-                        "operation_id": self.camel_to_snake(
-                            openapi_spec["paths"][path][j]["operationId"]
-                        ),
-                        "method": j,
-                        "path": path,
-                    }
-                    for j in openapi_spec["paths"][path]
-                    if j != "parameters"
-                ]
-                for path in openapi_spec["paths"]
-            ]
-        )
-
-    @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
         if slug is None:
             raise ValueError("slug can't None")
@@ -366,7 +324,49 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         return {"authorization": f"Bearer {access_token}"}
 
     @classmethod
-    def _to_table(cls, resp):
+    def camel_to_snake(cls, name):
+        # Insert an underscore before any uppercase letter that is not at the beginning of the string
+        # and convert the entire string to lowercase.
+        name = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+        name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+        return re.sub(r"(\s*_)", r"_", name).lower()
+
+    def search_dict(self, parameters):
+        def _search_dict(d, i):
+            k = i.pop(1)
+            return d[k] if len(i) == 1 else _search_dict(d[k], i)
+
+        return (
+            _search_dict(self.oa_spec, parameters["$ref"].split(r"/"))
+            if "$ref" in parameters
+            else parameters
+        )
+
+    # List of dictionaries defining the dynamic methods.
+    # Each dictionary specifies the method 'operation_id' and other key-value pairs
+    # that become default keyword arguments for that method.
+    with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
+        openapi_spec = yaml.safe_load(f)
+
+        method_configs = chain.from_iterable(
+            [
+                [
+                    {
+                        "operation_id": NationBuilderV1.camel_to_snake(
+                            openapi_spec["paths"][path][j]["operationId"]
+                        ),
+                        "method": j,
+                        "path": path,
+                    }
+                    for j in openapi_spec["paths"][path]
+                    if j != "parameters"
+                ]
+                for path in openapi_spec["paths"]
+            ]
+        )
+
+    @classmethod
+    def _to_table(cls, resp) -> Table:
         return Table(
             [
                 {"id": i["id"], "type": i["type"]}.update(i["attributes"])
@@ -375,12 +375,9 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         )
 
     def _get_next(self, resp):
-        try:
-            q = urlparse(resp.json()["links"]["next"])
-            resp = self.client.get_request(q.path, params=q.query)
-            return resp
-        except:
-            return None
+        q = urlparse(resp.json()["links"]["next"])
+        resp = self.client.get_request(q.path, params=q.query)
+        return resp
 
     @classmethod
     def _get_all(self, resp: int, limit: int) -> Table:
@@ -407,7 +404,6 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
                 params[f"{param_name}[{key}]"] = value
         return params
 
-
     def _field_params(self, resource: str, fields: str | list) -> dict:
         if not fields:
             return {}
@@ -420,10 +416,12 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
 
     def resource(
         self,
-        req_type: str,
-        url_path: str,
-        resource: str,
         data: dict = None,
+        id = None,
+        client = None,
+        req_type: str = None,
+        url: str = None,
+        resource: str = None,
         filters: dict = None,
         fields: list = None,
         sort_by: dict = None,
@@ -448,14 +446,32 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
             params["stats[total]"] = "count"
         params["page_size"] = min(100, max(1, page_size))
 
-        resp = self.client.request(
-            url=url_path,
-            req_type=req_type.upper(),
-            json=data,
-            params=params,
+        valid_req_params = {
+            "GET": ("url", "params", "return_format"),
+            "POST": ("url", "params", "data", "json", "success_codes"),
+            "DELETE": ("url", "params", "success_codes"),
+            "PUT": ("url", "params", "data", "json", "success_codes"),
+            "PATCH": ("url", "params", "data", "json", "success_codes"),
+        }
+
+        req_params = {
+            "url": url,
+            "params": params,
+            "data": data,
+            "json": json_data,
+            "return_format": return_format,
+            "success_codes": succss_code,
+        }
+
+        resp = client(
+            **{
+                k: v
+                for k, v in req_params.items()
+                if v is not None and k in valid_req_params[req_type]
+            }
         )
 
-        if all_pages and req_type.upper() == "GET":
+        if all_pages and isinstance(client, self.client.get_request):
             return self._get_all(resp, results_limit)
         return NationBuilder._to_table(resp)
 
