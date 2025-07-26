@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import time
-from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs, urlparse
@@ -231,7 +230,68 @@ class DynamicMethodCreator(type):
 
     def __new__(mcs, name, bases, namespace):
         # Retrieve the list of method configurations from the class's namespace
-        method_configs = namespace.get("method_configs", [])
+
+        def read_spec():
+            with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
+                return yaml.safe_load(f)
+
+        def camel_to_snake(name):
+            # Insert an underscore before any uppercase letter that is not at the beginning of the string
+            # and convert the entire string to lowercase.
+            s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+            return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+        def search_spec(parameters, spec):
+            def _search_spec(struct, i):
+                var = i.pop(1)
+                if len(i) != 1:
+                    _search_spec(struct[var], i)
+                return struct[var]
+
+            if "$ref" in parameters:
+                return _search_spec(spec, parameters["$ref"].split(r"/"))
+            return parameters
+
+        def get_method_configs():
+            api_spec = read_spec()
+
+            method_configs = (
+                {
+                    "operation_id": camel_to_snake(api_spec["paths"][path][method]["operationId"]),
+                    "summary": api_spec["paths"][path][method]["summary"],
+                    "method": method,
+                    "path": path,
+                    "parameters": (
+                        [
+                            search_spec(p, api_spec)
+                            for p in api_spec["paths"][path][method]["parameters"]
+                        ]
+                        if "parameters" in api_spec["paths"][path][method]
+                        else []
+                    )
+                    + (
+                        [search_spec(p, api_spec) for p in api_spec["paths"][path]["parameters"]]
+                        if "parameters" in api_spec["paths"][path].keys()
+                        else []
+                    ),
+                    "request_schema": (
+                        search_spec(
+                            api_spec["paths"][path][method]["requestBody"]["content"][
+                                r"application/json"
+                            ]["schema"],
+                            api_spec,
+                        )
+                        if "requestBody" in api_spec["paths"][path][method]
+                        else None
+                    ),
+                }
+                for path in api_spec["paths"]
+                for method in api_spec["paths"][path]
+                if method != "parameters"
+            )
+            return method_configs
+
+        method_configs = get_method_configs()
 
         # Iterate over each dictionary in the method_configs list
         for config_dict in method_configs:
@@ -261,6 +321,13 @@ class DynamicMethodCreator(type):
                 # Runtime arguments take precedence, effectively overriding defaults.
                 final_args = {**method_defaults, **runtime_kwargs}
 
+<<<<<<< HEAD
+=======
+                # Extract 'count' and 'message' from the final combined arguments.
+                # Provide sensible fallbacks if 'count' or 'message' are not present
+                # in either the defaults or the runtime arguments.
+
+>>>>>>> 1ef8944749178fe138d0d99c26356331b69498ab
                 self.resource(
                     req_type=final_args.get("req_type"),
                     url_path=final_args.get("url_path"),
@@ -296,6 +363,12 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         headers.update(NationBuilderV2.get_auth_headers(token))
 
         self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers)
+<<<<<<< HEAD
+=======
+        # List of dictionaries defining the dynamic methods.
+        # Each dictionary specifies the method 'operation_id' and other key-value pairs
+        # that become default keyword arguments for that method.
+>>>>>>> 1ef8944749178fe138d0d99c26356331b69498ab
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -375,9 +448,16 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         )
 
     def _get_next(self, resp):
+<<<<<<< HEAD
         q = urlparse(resp.json()["links"]["next"])
         resp = self.client.get_request(q.path, params=q.query)
         return resp
+=======
+        if "next" in resp.json()["links"]:
+            q = urlparse(resp.json()["links"]["next"])
+            resp = self.client.get_request(q.path, params=q.query)
+            return resp
+>>>>>>> 1ef8944749178fe138d0d99c26356331b69498ab
 
     @classmethod
     def _get_all(self, resp: int, limit: int) -> Table:
@@ -389,7 +469,8 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
             data.stack(NationBuilderV2._to_table(resp))
         return data
 
-    def _param_builder(self, param_name: str, param_dict: dict) -> dict:
+    @classmethod
+    def _param_builder(cls, param_name: str, param_dict: dict) -> dict:
         """Convert param dictionary into NationBuilder's param format."""
         if not param_dict:
             return {}
@@ -404,7 +485,12 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
                 params[f"{param_name}[{key}]"] = value
         return params
 
+<<<<<<< HEAD
     def _field_params(self, resource: str, fields: str | list) -> dict:
+=======
+    @classmethod
+    def _field_params(cls, resource: str, fields: str | list) -> dict:
+>>>>>>> 1ef8944749178fe138d0d99c26356331b69498ab
         if not fields:
             return {}
         elif isinstance(fields, str):
