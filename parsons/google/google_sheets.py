@@ -31,6 +31,7 @@ class GoogleSheets:
         scope = [
             "https://spreadsheets.google.com/feeds",
             "https://www.googleapis.com/auth/drive",
+            # "https://www.googleapis.com/auth/spreadsheets"
         ]
 
         env_credentials_path = str(uuid.uuid4())
