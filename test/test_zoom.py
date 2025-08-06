@@ -1048,3 +1048,35 @@ class TestZoom(unittest.TestCase):
         m.post(ZOOM_AUTH_CALLBACK, json={"access_token": "fakeAccessToken"})
         m.get(ZOOM_URI + "webinars/123/", json=occurrences)
         assert_matching_tables(self.zoomv2.get_webinar_occurrences(123), tbl)
+
+        @requests_mock.Mocker()
+        def test_get_past_meeting_instances(self, m):
+            meetings = {
+                "meetings": [
+                    {
+                        "uuid": "123456789",
+                        "start_time": "2023-01-01T10:00:00Z",
+                    },
+                    {
+                        "uuid": "987654321",
+                        "start_time": "2023-01-02T14:00:00Z",
+                    },
+                ]
+            }
+
+            tbl = Table(
+                [
+                    {
+                        "uuid": "123456789",
+                        "start_time": "2023-01-01T10:00:00Z",
+                    },
+                    {
+                        "uuid": "987654321",
+                        "start_time": "2023-01-02T14:00:00Z",
+                    },
+                ]
+            )
+
+            m.post(ZOOM_AUTH_CALLBACK, json={"access_token": "fakeAccessToken"})
+            m.get(ZOOM_URI + "past_meetings/123/instances", json=meetings)
+            assert_matching_tables(self.zoomv2.get_past_meeting_instances(123), tbl)
