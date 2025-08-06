@@ -907,6 +907,24 @@ class ZoomV2(ZoomV1):
             "Method get_webinar_poll_results is deprecated in favor of get_webinar_poll_reports"
         )
 
+    def get_past_meeting_instances(self, meeting_id: int | str) -> Table:
+        """
+        List past meeting instances
+
+        `Args`:
+            meeting_id: str
+                Unique identifier for Zoom meeting
+
+        `Returns:`
+            Parsons Table
+                See :ref:`parsons-table` for output options.
+        """
+
+        endpoint = f"past_meetings/{meeting_id}/instances"
+        tbl = self._get_request(endpoint=endpoint, data_key=None)
+        logger.info(f"Retrieved {tbl.num_rows} meeting instances for meeting ID {meeting_id}")
+        return tbl
+
 
 class Zoom:
     def __new__(
@@ -933,7 +951,9 @@ class Zoom:
                 variable set.
             parsons_version (str, optional): Parsons version of the Zoom connector. Defaults to v1.
         """
-        parsons_version = check_env.check("ZOOM_PARSONS_VERSION", parsons_version)
+        env_zoom = check_env.check("ZOOM_PARSONS_VERSION", None, optional=True)
+        if parsons_version == "v1" and env_zoom is not None:
+            parsons_version = env_zoom
         if parsons_version == "v1":
             logger.info("Consider upgrading to version 2 of the Zoom connector!")
             logger.info(
