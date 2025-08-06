@@ -921,7 +921,7 @@ class ZoomV2(ZoomV1):
         """
 
         endpoint = f"past_meetings/{meeting_id}/instances"
-        tbl = self._get_request(endpoint=endpoint, data_key=None)
+        tbl = self._get_request(endpoint=endpoint, data_key="meetings")
         logger.info(f"Retrieved {tbl.num_rows} meeting instances for meeting ID {meeting_id}")
         return tbl
 
