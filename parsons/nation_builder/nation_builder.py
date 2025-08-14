@@ -1,16 +1,13 @@
 import json
 import logging
-import re
 import time
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs, urlparse
-
-import yaml
 
 from parsons import Table
 from parsons.utilities import check_env
 from parsons.utilities.api_connector import APIConnector
+from parsons.utilities.api_connector import OAuth2APIConnector
 
 logger = logging.getLogger(__name__)
 
@@ -221,145 +218,7 @@ class NationBuilderV1:
         return (False, None)
 
 
-class DynamicMethodCreator(type):
-    """
-    A metaclass that dynamically adds methods to a class based on its 'method_configs'.
-    Each configuration dictionary defines a method, where its keys and values
-    become keyword arguments and their default values for the dynamically created method.
-    """
-
-    def __new__(mcs, name, bases, namespace):
-        # Retrieve the list of method configurations from the class's namespace
-
-        def read_spec():
-            with open(Path(__file__).parent / r"openapi-spec.yaml", "r") as f:
-                return yaml.safe_load(f)
-
-        def camel_to_snake(name):
-            # Insert an underscore before any uppercase letter that is not at the beginning of the string
-            # and convert the entire string to lowercase.
-            s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
-            return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
-
-        def search_spec(parameters, spec):
-            def _search_spec(struct, i):
-                var = i.pop(1)
-                if len(i) != 1:
-                    _search_spec(struct[var], i)
-                return struct[var]
-
-            if "$ref" in parameters:
-                return _search_spec(spec, parameters["$ref"].split(r"/"))
-            return parameters
-
-        def get_method_configs():
-            api_spec = read_spec()
-
-            def get_config_parameters(path, method):
-                path_params, method_params = [], []
-                if "parameters" in api_spec["paths"][path].keys():
-                    path_params = [
-                        search_spec(param, api_spec)
-                        for param in api_spec["paths"][path]["parameters"]
-                    ]
-                if "parameters" in api_spec["paths"][path][method]:
-                    method_params = [
-                        search_spec(param, api_spec)
-                        for param in api_spec["paths"][path][method]["parameters"]
-                    ]
-                return path_params + method_params
-
-            def get_request_spec(x):
-                if "requestBody" in x:
-                    search_val = x["requestBody"]["content"][r"application/json"]["schema"]
-                    return search_spec(search_val,api_spec)
-                return None
-
-            method_configs = (
-                {
-                    "operation_id": camel_to_snake(api_spec["paths"][path][method]["operationId"]),
-                    "summary": api_spec["paths"][path][method]["summary"],
-                    "req_type": method,
-                    "path": path,
-                    "parameters": get_config_parameters(path, method),
-                    "request_schema": get_request_spec(api_spec["paths"][path][method]),
-                }
-                for path in api_spec["paths"]
-                for method in api_spec["paths"][path]
-                if method != "parameters"
-            )
-            return method_configs
-
-        method_configs = get_method_configs()
-
-        # Iterate over each dictionary in the method_configs list
-        for config_dict in method_configs:
-            # Extract the name of the method to be created using "operation_id"
-            method_name = config_dict.get("operation_id")
-            if not method_name:
-                # Skip this configuration if no method name is provided
-                continue
-
-            # Extract default arguments for the new method from the config_dict.
-            # We exclude 'operation_id' as it's the method's name, not an argument.
-            method_defaults = {k: v for k, v in config_dict.items() if k != "operation_id"}
-
-            # Define the function that will become the new method.
-            # This function will accept arbitrary keyword arguments (**runtime_kwargs),
-            # which will override the defaults defined in method_defaults.
-            def _method_template(self, **runtime_kwargs):
-                """
-                A dynamically created method that combines predefined defaults
-                with runtime arguments and calls the resource method.
-
-                Args:
-                    **runtime_kwargs: Any keyword arguments passed when calling this method,
-                                        which will override the defaults.
-                """
-                # Combine the pre-defined defaults with any runtime arguments.
-                # Runtime arguments take precedence, effectively overriding defaults.
-                final_args = {**method_defaults, **runtime_kwargs}
-
-                resource_args = {
-                    "GET": {
-                        "valid_req_params": ("url", "params", "return_format"),
-                        "client": self.client.get_request,
-                    },
-                    "POST": {
-                        "valid_req_params": ("url", "params", "data", "json", "success_codes"),
-                        "client": self.client.post_request,
-                    },
-                    "DELETE": {
-                        "valid_req_params": ("url", "params", "success_codes"),
-                        "client": self.client.delete_request,
-                    },
-                    "PUT": {
-                        "valid_req_params": ("url", "params", "data", "json", "success_codes"),
-                        "client": self.client.put_request,
-                    },
-                    "PATCH": {
-                        "valid_req_params": ("url", "params", "data", "json", "success_codes"),
-                        "client": self.client.patch_request,
-                    },
-                }
-
-                self.resource(
-                    req_type=final_args.get("req_type"),
-                    url_path=final_args.get("url_path"),
-
-                )
-
-            # Assign a unique name to the dynamically created function.
-            _method_template.__name__ = method_name
-
-            # This makes it a callable method of the class being created.
-            namespace[method_name] = _method_template
-
-        # Call the superclass's __new__ method to finalize the class creation process.
-        return super().__new__(mcs, name, bases, namespace)
-
-
-class NationBuilderV2(metaclass=DynamicMethodCreator):
+class NationBuilderV2:
     def __init__(
         self,
         slug: Optional[str] = None,
@@ -376,7 +235,10 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         headers.update(NationBuilderV2.get_auth_headers(token))
 
-        self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers)
+        self.client = OAuth2APIConnector(
+            uri=NationBuilderV2.get_uri(slug),
+            client_id=
+        )
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -518,12 +380,49 @@ class NationBuilderV2(metaclass=DynamicMethodCreator):
             return self._get_all(resp, results_limit)
         return NationBuilder._to_table(resp)
 
+        def refresh_token_for_nation(nation_slug: str, refresh_token: str) -> dict:
+            """
+            Contacts the NationBuilder API to exchange a refresh token for a new set of tokens.
+
+            Args:
+                nation_slug: The slug of the NationBuilder nation.
+                refresh_token: The refresh token to be exchanged.
+
+            Returns:
+                A dictionary containing the new token data from the API.
+
+            Raises:
+                Exception: If the token refresh request fails.
+            """
+            token_url = f"https://{nation_slug}.nationbuilder.com/oauth/token"
+            payload = {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+            }
+            headers = {"Content-Type": "application/json"}
+
+            print(f"Attempting to refresh token for nation: {nation_slug}")
+            response = requests.post(token_url, json=payload, headers=headers)
+
+            if response.status_code == 200:
+                new_token_data = response.json()
+                print("Successfully refreshed token.")
+                return new_token_data
+            else:
+                print(f"Failed to refresh token. Status: {response.status_code}, Body: {response.text}")
+                raise Exception("NationBuilder token refresh failed")
+
 
 class NationBuilder:
     def __new__(
         cls,
         slug: Optional[str] = None,
         access_token: Optional[str] = None,
+        client_id: str,
+        client_secret: str,
+        token_url: str,
         refresh_token: Optional[str] = None,
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
@@ -536,11 +435,11 @@ class NationBuilder:
             logger.info(
                 "See docs for more information: https://move-coop.github.io/parsons/html/latest/nation_builder.html"
             )
-            return NationBuilderV1(slug=slug, access_token=client_id, client_secret=client_secret)
+            return NationBuilderV1(slug=slug, access_token=access_token)
         if parsons_version == "v2":
             return NationBuilderV2(
-                slug=slug,
-                access_token=access_token,
+                slug=check_env("NB_SLUG", slug),
+                access_token=check_env("NB_ACCESS_TOKEN", access_token),
                 refresh_token=refresh_token,
                 client_id=client_id,
                 client_secret=client_secret,
