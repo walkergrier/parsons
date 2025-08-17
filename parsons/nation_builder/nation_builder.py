@@ -235,10 +235,7 @@ class NationBuilderV2:
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         headers.update(NationBuilderV2.get_auth_headers(token))
 
-        self.client = OAuth2APIConnector(
-            uri=NationBuilderV2.get_uri(slug),
-            client_id=
-        )
+        self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers, data_key="data")
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -298,10 +295,10 @@ class NationBuilderV2:
         if not param_dict:
             return {}
 
-        params = {}
+        params = []
         for key, value in param_dict.items():
             if isinstance(value, dict):  # Handling complex cases
-                params.update(
+                params.append(
                     {f"{param_name}[{key}][{operator}]": val for operator, val in value.items()}
                 )
             else:  # Simple case
@@ -318,6 +315,20 @@ class NationBuilderV2:
             return {f"fields[{resource}]": ",".join(fields)}
         else:
             raise TypeError("fields should be str or list")
+
+    def get_signups(
+        self,
+        query_params_dict: dict | None = None,
+        query_params_str: str = "",
+        page_size: int = 100,
+        all_results: bool = False,
+        results_limit: int = 0,
+    ):
+        params = self._param_builder("filter", filters)
+        params.update(self._field_params(resource="signups", fields=fields))
+        if all_results:
+            params["stats[total]"] = "count"
+        params["page_size"] = min(100, max(1, page_size))
 
     def resource(
         self,
@@ -420,16 +431,16 @@ class NationBuilder:
         cls,
         slug: Optional[str] = None,
         access_token: Optional[str] = None,
-        client_id: str,
-        client_secret: str,
-        token_url: str,
-        refresh_token: Optional[str] = None,
-        client_id: Optional[str] = None,
-        client_secret: Optional[str] = None,
-        redirect_uri: Optional[str] = None,
         parsons_version: str = "v1",
+        # refresh_token: Optional[str] = None,
+        # client_id: Optional[str] = None,
+        # client_secret: Optional[str] = None,
+        # redirect_uri: Optional[str] = None,
     ):
-        parsons_version = check_env.check("NB_PARSONS_VERSION", parsons_version)
+        try:
+            parsons_version = check_env.check("NB_PARSONS_VERSION")
+        except Exception as e:
+            pass
         if parsons_version == "v1":
             logger.info("Consider upgrading to version 2 of the NationBuilder connector!")
             logger.info(
@@ -440,9 +451,9 @@ class NationBuilder:
             return NationBuilderV2(
                 slug=check_env("NB_SLUG", slug),
                 access_token=check_env("NB_ACCESS_TOKEN", access_token),
-                refresh_token=refresh_token,
-                client_id=client_id,
-                client_secret=client_secret,
-                redirect_uri=redirect_uri,
+                # refresh_token=refresh_token,
+                # client_id=client_id,
+                # client_secret=client_secret,
+                # redirect_uri=redirect_uri,
             )
         raise ValueError(f"{parsons_version} not supported")
