@@ -2,12 +2,11 @@ import json
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple, cast
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlencode
 
 from parsons import Table
 from parsons.utilities import check_env
 from parsons.utilities.api_connector import APIConnector
-from parsons.utilities.api_connector import OAuth2APIConnector
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +227,15 @@ class NationBuilderV2:
         client_secret: Optional[str] = None,
         redirect_uri: Optional[str] = None,
     ) -> None:
-        slug = check_env.check("NB_SLUG", slug)
-        token = check_env.check("NB_ACCESS_TOKEN", access_token)
-        refresh_token = check_env.check("NB_REFRESH_TOKEN", refresh_token)
+        # slug = check_env.check("NB_SLUG", slug)
+        # token = check_env.check("NB_ACCESS_TOKEN", access_token)
+        # refresh_token = check_env.check("NB_REFRESH_TOKEN", refresh_token)
 
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
-        headers.update(NationBuilderV2.get_auth_headers(token))
-
-        self.client = APIConnector(NationBuilderV2.get_uri(slug), headers=headers, data_key="data")
+        self.client = APIConnector(
+            NationBuilderV2.get_uri(slug),
+            headers=NationBuilderV2.get_auth_headers(access_token=access_token),
+            data_key="data",
+        )
 
     @classmethod
     def get_uri(cls, slug: Optional[str]) -> str:
@@ -260,34 +260,17 @@ class NationBuilderV2:
 
         if len(access_token.strip()) == 0:
             raise ValueError("access_token can't be an empty str")
-
-        return {"authorization": f"Bearer {access_token}"}
-
-
-    @classmethod
-    def _to_table(cls, resp) -> Table:
-        return Table(
-            [
-                {"id": i["id"], "type": i["type"]}.update(i["attributes"])
-                for i in resp.json()["data"]
-            ],
-        )
-
-    def _get_next(self, resp):
-        if "next" in resp.json()["links"]:
-            q = urlparse(resp.json()["links"]["next"])
-            resp = self.client.get_request(q.path, params=q.query)
-            return resp
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "authorization": f"Bearer {access_token}",
+        }
+        return headers
 
     @classmethod
-    def _get_all(self, resp: int, limit: int) -> Table:
-        data = NationBuilderV2._to_table(resp)
-        while limit != 0 and len(data) < limit:
-            resp = self.get_next(resp)
-            if resp is None:
-                break
-            data.stack(NationBuilderV2._to_table(resp))
-        return data
+    def _to_table(cls, data) -> Table:
+        result = [{"id": i["id"], "type": i["type"]} | i["attributes"] for i in data]
+        return Table(result)
 
     @classmethod
     def _param_builder(cls, param_name: str, param_dict: dict) -> dict:
@@ -316,114 +299,63 @@ class NationBuilderV2:
         else:
             raise TypeError("fields should be str or list")
 
+    def _get_next(self, resp):
+        if "links" in resp.json() and "next" in resp.json()["links"]:
+            q = urlparse(resp.json()["links"]["next"])
+            resp = self.client.get_request(q.path, params=q.query)
+            return resp
+
+    def _get_all(self, resp: int, limit: int) -> Table:
+        data = resp.json()["data"]
+        while limit > 0 and len(data) < limit:
+            resp = self._get_next(resp)
+            data += resp.json()["data"]
+            if resp is None:
+                break
+        return self._to_table(data=data)
+
     def get_signups(
         self,
-        query_params_dict: dict | None = None,
-        query_params_str: str = "",
+        params: dict = None,
         page_size: int = 100,
         all_results: bool = False,
-        results_limit: int = 0,
+        limit: int = 0,
     ):
-        params = self._param_builder("filter", filters)
-        params.update(self._field_params(resource="signups", fields=fields))
-        if all_results:
-            params["stats[total]"] = "count"
-        params["page_size"] = min(100, max(1, page_size))
+        page_size = min(100, max(1, page_size))
+        resp = self.client.get_request("signups", params=params)
+        if not all_results:
+            return self._to_table(resp.json()["data"])
+        return self._get_all(resp=resp, limit=limit)
 
-    def resource(
-        self,
-        data: dict = None,
-        id: str | int = None,
-        client = None,
-        req_type: str = None,
-        url: str = None,
-        resource: str = None,
-        filters: dict = None,
-        fields: list = None,
-        sort_by: dict = None,
-        result_count: bool = False,
-        page_size: int = 100,
-        all_results: bool = False,
-        results_limit: int = 0,
-    ) -> Table:
-        """
-        Generic function to fetch data from any NationBuilder v2 API endpoint.
-        :param resource: API resource (e.g., "people", "donations", "events").
-        :param filters: Dictionary of filters.
-        :param per_page: Number of records per page.
-        :param all_pages: Whether to fetch all pages.
-        """
+    def post_signup(self, payload, params):
+        if not isinstance(payload, dict):
+            raise ValueError("signup payload must be a dict")
+        return self.client.post_request("signups", params=params, json=payload)
 
-        params = self._param_builder("filter", filters)
-        params.update(self._field_params(resource=resource, fields=fields))
-        if sort_by:
-            params["sort"] = sort_by
-        if result_count or all_results:
-            params["stats[total]"] = "count"
-        params["page_size"] = min(100, max(1, page_size))
+    def patch_signup(self, payload, params):
+        required_keys = [
+            "civicrm_id",
+            "county_file_id",
+            "dw_id",
+            "external_id",
+            "email",
+            "facebook_username",
+            "ngp_id",
+            "salesforce_id",
+            "twitter_login",
+            "van_id",
+        ]
 
-        valid_req_params = {
-            "GET": ("url", "params", "return_format"),
-            "POST": ("url", "params", "data", "json", "success_codes"),
-            "DELETE": ("url", "params", "success_codes"),
-            "PUT": ("url", "params", "data", "json", "success_codes"),
-            "PATCH": ("url", "params", "data", "json", "success_codes"),
-        }
+        if not isinstance(payload, dict):
+            raise ValueError("signup payload must be a dict")
 
-        req_params = {
-            "url": url,
-            "params": params,
-            "data": data,
-            "json": json_data,
-            "return_format": return_format,
-            "success_codes": succss_code,
-        }
+        has_required_key = any(x in payload for x in required_keys)
 
-        resp = self.client(
-            **{
-                k: v
-                for k, v in req_params.items()
-                if v is not None and k in valid_req_params[req_type]
-            }
-        )
+        if not has_required_key:
+            keys = ", ".join(required_keys)
+            raise ValueError(f"person dict must contain at least one key of {keys}")
 
-        if all_results and isinstance(client, self.client.get_request):
-            return self._get_all(resp, results_limit)
-        return NationBuilder._to_table(resp)
-
-        def refresh_token_for_nation(nation_slug: str, refresh_token: str) -> dict:
-            """
-            Contacts the NationBuilder API to exchange a refresh token for a new set of tokens.
-
-            Args:
-                nation_slug: The slug of the NationBuilder nation.
-                refresh_token: The refresh token to be exchanged.
-
-            Returns:
-                A dictionary containing the new token data from the API.
-
-            Raises:
-                Exception: If the token refresh request fails.
-            """
-            token_url = f"https://{nation_slug}.nationbuilder.com/oauth/token"
-            payload = {
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-                "client_id": CLIENT_ID,
-                "client_secret": CLIENT_SECRET,
-            }
-            headers = {"Content-Type": "application/json"}
-
-            print(f"Attempting to refresh token for nation: {nation_slug}")
-            response = requests.post(token_url, json=payload, headers=headers)
-
-            if response.status_code == 200:
-                new_token_data = response.json()
-                print("Successfully refreshed token.")
-                return new_token_data
-            else:
-                print(f"Failed to refresh token. Status: {response.status_code}, Body: {response.text}")
-                raise Exception("NationBuilder token refresh failed")
+        return self.client.patch_request("signups/push", params=params, json=payload)
 
 
 class NationBuilder:
@@ -437,10 +369,8 @@ class NationBuilder:
         # client_secret: Optional[str] = None,
         # redirect_uri: Optional[str] = None,
     ):
-        try:
-            parsons_version = check_env.check("NB_PARSONS_VERSION")
-        except Exception as e:
-            pass
+        if parsons_version == "v1":
+            parsons_version = check_env.check("NB_PARSONS_VERSION", None, True)
         if parsons_version == "v1":
             logger.info("Consider upgrading to version 2 of the NationBuilder connector!")
             logger.info(
@@ -449,8 +379,8 @@ class NationBuilder:
             return NationBuilderV1(slug=slug, access_token=access_token)
         if parsons_version == "v2":
             return NationBuilderV2(
-                slug=check_env("NB_SLUG", slug),
-                access_token=check_env("NB_ACCESS_TOKEN", access_token),
+                slug=check_env.check("NB_SLUG", slug),
+                access_token=check_env.check("NB_ACCESS_TOKEN", access_token),
                 # refresh_token=refresh_token,
                 # client_id=client_id,
                 # client_secret=client_secret,
