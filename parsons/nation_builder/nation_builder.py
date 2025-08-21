@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from typing import Any, Dict, Optional, Tuple, cast
-from urllib.parse import parse_qs, urlparse, urlencode
+from urllib.parse import parse_qs, urlparse, quote_plus
 
 from parsons import Table
 from parsons.utilities import check_env
@@ -248,7 +248,7 @@ class NationBuilderV2:
         if len(slug.strip()) == 0:
             raise ValueError("slug can't be an empty str")
 
-        return f"https://{slug}.nationbuilder.com"
+        return f"https://{slug}.nationbuilder.com/api/v2/"
 
     @classmethod
     def get_auth_headers(cls, access_token: Optional[str]) -> Dict[str, str]:
@@ -299,38 +299,214 @@ class NationBuilderV2:
         else:
             raise TypeError("fields should be str or list")
 
-    def _get_next(self, resp):
-        if "links" in resp.json() and "next" in resp.json()["links"]:
-            q = urlparse(resp.json()["links"]["next"])
-            resp = self.client.get_request(q.path, params=q.query)
+    def _get_next(self, resp, **kwargs):
+        if "links" in resp and "next" in resp["links"]:
+            next_url = resp["links"]["next"]
+            if next_url.startswith("/api/v2/"):
+                next_url = urlparse(next_url[len("/api/v2/") :])
+            print(next_url)
+            resp = self.client.get_request(
+                next_url.path, params=[tuple(i.split("=")) for i in next_url.query.split("&")]
+            )
             return resp
 
-    def _get_all(self, resp: int, limit: int) -> Table:
-        data = resp.json()["data"]
-        while limit > 0 and len(data) < limit:
+    def _get_all(self, resp: int, limit: int, **kwargs) -> Table:
+        data = resp["data"]
+        while limit <= 0 or len(data) < limit:
             resp = self._get_next(resp)
-            data += resp.json()["data"]
+            data += resp["data"]
             if resp is None:
                 break
         return self._to_table(data=data)
 
-    def get_signups(
+    def list_resource(
         self,
+        resource,
         params: dict = None,
         page_size: int = 100,
         all_results: bool = False,
+        url=None,
         limit: int = 0,
+        raw_resp: bool = False,
+        raw_json: bool = False,
+        count: bool = False,
+        **kwargs,
     ):
-        page_size = min(100, max(1, page_size))
-        resp = self.client.get_request("signups", params=params)
-        if not all_results:
-            return self._to_table(resp.json()["data"])
-        return self._get_all(resp=resp, limit=limit)
+        if not url:
+            url = resource
+        if not params:
+            params = {}
+        params["page[size]"] = min(100, max(1, page_size))
+        if count:
+            params["stats[total]"] = "count"
 
-    def post_signup(self, payload, params):
+        if raw_resp:
+            return self.client.request(url, req_type="GET", params=params)
+
+        resp = self.client.get_request(url, params=params)
+
+        if all_results:
+            return self._get_all(resp=resp, limit=limit)
+        return self._to_table(resp["data"])
+
+    # Resource Methods
+    def show_resource(self, resource, id: int | str, params: dict = None, url=None):
+        id = int(id)
+        if not url:
+            url = f"{resource}/{id}"
+        resp = self.client.get_request(url, params=params)
+
+        return self._to_table(resp["data"])
+
+    def post_resource(self, resource, params: dict, payload: dict, url=None):
+        if not url:
+            url = resource
         if not isinstance(payload, dict):
-            raise ValueError("signup payload must be a dict")
-        return self.client.post_request("signups", params=params, json=payload)
+            raise ValueError("payload must be a dict")
+        payload = {"data": {"type": resource, "attributes": payload}}
+        return self.client.post_request(url, params=params, json=payload)
+
+    def delete_resource(self, resource, id: int | str, params: dict = None, url=None):
+        id = int(id)
+        if not url:
+            url = f"{resource}/{id}"
+        return self.client.delete_request(url, params=params)
+
+    def upsert_resource(self, resource, payload, params, url=None):
+        if not url:
+            url = f"{resource}/push"
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be a dict")
+        payload = {"data": {"type": resource, "attributes": payload}}
+        return self.client.patch_request(url, params=params, json=payload)
+
+    def patch_resource(self, resource, id, params, payload, url=None):
+        id = int(id)
+        if not url:
+            url = f"{resource}/{id}"
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be a dict")
+        payload = {"data": {"id": id, "type": resource, "attributes": payload}}
+        return self.client.patch_request(url, params=params, json=payload)
+
+    # Path Histories Endpoints
+    def get_path_histories(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("path_histories", params, page_size, all_results, **kwargs)
+
+    def show_path_history(self, id: int | str, params: dict = None):
+        return self.show_resource("path_histories", id, params)
+
+    # Path Journey Status Changes Endpoints
+    def get_path_journey_status_changes(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource(
+            "path_journey_status_changes", params, page_size, all_results, **kwargs
+        )
+
+    def post_path_journey_status_change(self, payload: dict = None, params: dict = None):
+        return self.post_resource("path_journey_status_changes", params, payload)
+
+    def show_path_journey_status_change(self, id: int | str, params: dict = None):
+        return self.show_resource("path_journey_status_changes", id, params)
+
+    def delete_path_journey_status_change(self, id: int | str, params: dict = None):
+        return self.delete_resource("path_journey_status_changes", id, params)
+
+    def patch_path_journey_status_change(
+        self, id: int | str, payload: dict = None, params: dict = None
+    ):
+        return self.patch_resource("path_journey_status_changes", id, params, payload)
+
+    # Path Journeys
+    def get_path_journeys(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("path_journeys", params, page_size, all_results, **kwargs)
+
+    def post_path_journey(self, payload: dict = None, params: dict = None):
+        return self.post_resource("path_journeys", params, payload)
+
+    def show_path_journey(self, id: int | str, params: dict = None):
+        return self.show_resource("path_journey", id, params)
+
+    def patch_path_journey(self, id: int | str, payload: dict, params: dict = None):
+        return self.patch_resource("path_journey", id, params, payload)
+
+    def abandon_path_journey(
+        self, id: int | str, path_journey_status_change_id: int | str, params: dict = None
+    ):
+        if not params:
+            params = {}
+        if not path_journey_status_change_id:
+            params["path_journey_status_change_id"] = int(path_journey_status_change_id)
+        id = int(id)
+        return self.client.patch_request(f"path_journeys/{id}/abandon", params=params)
+
+    def complete_path_journey(
+        self, id: int | str, path_journey_status_change_id: int | str, params: dict = None
+    ):
+        if not params:
+            params = {}
+        if not path_journey_status_change_id:
+            params["path_journey_status_change_id"] = int(path_journey_status_change_id)
+        id = int(id)
+        return self.client.patch_request(f"path_journeys/{id}/complete", params=params)
+
+    def reactivate_path_journey(self, id: int | str, params: dict = None):
+        id = int(id)
+        return self.client.patch_request(f"path_journeys/{id}/reactivate", params=params)
+
+    def void_path_journey(self, id: int | str, params: dict = None):
+        id = int(id)
+        return self.client.patch_request(f"path_journeys/{id}/void", params=params)
+
+    # Path Step Endpoints
+    def get_path_steps(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("path_steps", params, page_size, all_results, **kwargs)
+
+    def post_path_steps(self, payload: dict = None, params: dict = None):
+        return self.post_resource("path_steps", params, payload)
+
+    def show_path_step(self, id: int | str, params: dict = None):
+        return self.show_resource("path_steps", id, params)
+
+    def delete_path_step(self, id: int | str, params: dict = None):
+        return self.delete_resource("path_steps", id, params)
+
+    def patch_path_step(self, id: int | str, payload: dict, params: dict = None):
+        return self.patch_resource("path_steps", id, params, payload)
+
+    # Path Endpoints
+    def get_paths(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("paths", params, page_size, all_results, **kwargs)
+
+    def post_path(self, payload: dict = None, params: dict = None):
+        return self.post_resource("paths", params, payload)
+
+    def show_path(self, id: int | str, params: dict = None):
+        return self.show_resource("paths", id, params)
+
+    def delete_path(self, id: int | str, params: dict = None):
+        return self.delete_resource("paths", id, params)
+
+    def patch_path(self, id: int | str, payload: dict, params: dict = None):
+        return self.patch_resource("paths", id, params, payload)
+
+    # Signup Endpoints
+    def get_signups(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("signups", params, page_size, all_results, **kwargs)
+
+    def post_signup(self, payload: dict, params: dict):
+        return self.post_resource("signups", params, payload)
 
     def patch_signup(self, payload, params):
         required_keys = [
@@ -345,17 +521,11 @@ class NationBuilderV2:
             "twitter_login",
             "van_id",
         ]
-
-        if not isinstance(payload, dict):
-            raise ValueError("signup payload must be a dict")
-
         has_required_key = any(x in payload for x in required_keys)
-
         if not has_required_key:
             keys = ", ".join(required_keys)
-            raise ValueError(f"person dict must contain at least one key of {keys}")
-
-        return self.client.patch_request("signups/push", params=params, json=payload)
+            raise ValueError(f"payload dict must contain at least one key of {keys}")
+        return self.upsert_resource("signups", payload, params)
 
 
 class NationBuilder:
