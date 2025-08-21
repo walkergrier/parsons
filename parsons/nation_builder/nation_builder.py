@@ -415,6 +415,27 @@ class NationBuilderV2:
         self,
     ): ...
 
+
+    # Membership Endpoints
+    def get_memberships(
+        self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("memberships", params, page_size, all_results, **kwargs)
+
+    def show_membership(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("membrships", id, params, **kwargs)
+
+    def post_membership(self, payload: dict = None, params: dict = None):
+        return self.post_resource("memberships", params, payload)
+
+    def delete_membership(self, id: int | str, params: dict = None):
+        return self.delete_resource("path_membership", id, params)
+
+    def patch_membrship(
+        self, id: int | str, payload: dict = None, params: dict = None
+    ):
+        return self.patch_resource("path_membership", id, params, payload)
+
     # Path Histories Endpoints
     def get_path_histories(
         self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
