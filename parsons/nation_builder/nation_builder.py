@@ -299,15 +299,16 @@ class NationBuilderV2:
         else:
             raise TypeError("fields should be str or list")
 
+    def _urlparse(cls, url):
+        if url.startswith("/api/v2/"):
+            url = url[len("/api/v2/") :]
+        url = urlparse(url)
+        return url.path, [tuple(i.split("=")) for i in url.query.split("&")]
+
     def _get_next(self, resp, **kwargs):
         if "links" in resp and "next" in resp["links"]:
-            next_url = resp["links"]["next"]
-            if next_url.startswith("/api/v2/"):
-                next_url = urlparse(next_url[len("/api/v2/") :])
-            print(next_url)
-            resp = self.client.get_request(
-                next_url.path, params=[tuple(i.split("=")) for i in next_url.query.split("&")]
-            )
+            url, params = self._urlparse(resp["links"]["next"])
+            resp = self.client.get_request(url, params=params)
             return resp
 
     def _get_all(self, resp: int, limit: int, **kwargs) -> Table:
@@ -319,6 +320,7 @@ class NationBuilderV2:
                 break
         return self._to_table(data=data)
 
+    # Resource Methods
     def list_resource(
         self,
         resource,
@@ -336,9 +338,10 @@ class NationBuilderV2:
             url = resource
         if not params:
             params = {}
-        params["page[size]"] = min(100, max(1, page_size))
-        if count:
-            params["stats[total]"] = "count"
+        if isinstance(params, dict):
+            params["page[size]"] = min(100, max(1, page_size))
+            if count:
+                params["stats[total]"] = "count"
 
         if raw_resp:
             return self.client.request(url, req_type="GET", params=params)
@@ -349,14 +352,33 @@ class NationBuilderV2:
             return self._get_all(resp=resp, limit=limit)
         return self._to_table(resp["data"])
 
-    # Resource Methods
-    def show_resource(self, resource, id: int | str, params: dict = None, url=None):
+    def show_resource(
+        self, resource, id: int | str, params: dict = None, url=None, sideload: list = None
+    ):
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
         resp = self.client.get_request(url, params=params)
 
-        return self._to_table(resp["data"])
+        if not sideload:
+            return resp
+
+        sideloaded_resources = {
+            r: self.sideload_rescource(resp, r)
+            for r in resp["data"]["relationships"]
+            if r in sideload or sideload == "all"
+        }
+        resp["data"]["relationships"] = {k:v for k,v in sideloaded_resources.items() if v}
+        return resp
+
+    def sideload_rescource(self, resp, resource):
+        link = resp["data"]["relationships"][resource]["links"]["related"]
+        if not link:
+            return None
+        url, params = self._urlparse(link)
+        params.append((["page[size]"], 100))
+        return self.list_resource(resource, params, url)
+
 
     def post_resource(self, resource, params: dict, payload: dict, url=None):
         if not url:
@@ -389,14 +411,18 @@ class NationBuilderV2:
         payload = {"data": {"id": id, "type": resource, "attributes": payload}}
         return self.client.patch_request(url, params=params, json=payload)
 
+    def list_relationship(
+        self,
+    ): ...
+
     # Path Histories Endpoints
     def get_path_histories(
         self, params: dict = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource("path_histories", params, page_size, all_results, **kwargs)
 
-    def show_path_history(self, id: int | str, params: dict = None):
-        return self.show_resource("path_histories", id, params)
+    def show_path_history(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("path_histories", id, params, **kwargs)
 
     # Path Journey Status Changes Endpoints
     def get_path_journey_status_changes(
@@ -409,8 +435,8 @@ class NationBuilderV2:
     def post_path_journey_status_change(self, payload: dict = None, params: dict = None):
         return self.post_resource("path_journey_status_changes", params, payload)
 
-    def show_path_journey_status_change(self, id: int | str, params: dict = None):
-        return self.show_resource("path_journey_status_changes", id, params)
+    def show_path_journey_status_change(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("path_journey_status_changes", id, params, **kwargs)
 
     def delete_path_journey_status_change(self, id: int | str, params: dict = None):
         return self.delete_resource("path_journey_status_changes", id, params)
@@ -429,8 +455,8 @@ class NationBuilderV2:
     def post_path_journey(self, payload: dict = None, params: dict = None):
         return self.post_resource("path_journeys", params, payload)
 
-    def show_path_journey(self, id: int | str, params: dict = None):
-        return self.show_resource("path_journey", id, params)
+    def show_path_journey(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("path_journey", id, params, **kwargs)
 
     def patch_path_journey(self, id: int | str, payload: dict, params: dict = None):
         return self.patch_resource("path_journey", id, params, payload)
@@ -472,8 +498,8 @@ class NationBuilderV2:
     def post_path_steps(self, payload: dict = None, params: dict = None):
         return self.post_resource("path_steps", params, payload)
 
-    def show_path_step(self, id: int | str, params: dict = None):
-        return self.show_resource("path_steps", id, params)
+    def show_path_step(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("path_steps", id, params, **kwargs)
 
     def delete_path_step(self, id: int | str, params: dict = None):
         return self.delete_resource("path_steps", id, params)
@@ -490,8 +516,8 @@ class NationBuilderV2:
     def post_path(self, payload: dict = None, params: dict = None):
         return self.post_resource("paths", params, payload)
 
-    def show_path(self, id: int | str, params: dict = None):
-        return self.show_resource("paths", id, params)
+    def show_path(self, id: int | str, params: dict = None, **kwargs):
+        return self.show_resource("paths", id, params, **kwargs)
 
     def delete_path(self, id: int | str, params: dict = None):
         return self.delete_resource("paths", id, params)

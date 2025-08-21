@@ -15,7 +15,7 @@ class APIConnector(object):
     The API Connector is a low level class for API requests that other connectors
     can utilize. It is understood that there are many standards for REST APIs and it will be
     difficult to create a universal connector. The goal of this class is create series
-    of utilities that can be mixed and matched to, hopefully, meet the needs of the specific
+    of utilities that can be mixed and matched po, hopefully, meet the needs of the specific
     API.
 
     `Args:`
