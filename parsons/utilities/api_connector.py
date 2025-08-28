@@ -2,6 +2,7 @@ import logging
 import urllib.parse
 
 from requests import request as _request
+from requests import Response
 from requests.exceptions import HTTPError
 from simplejson.errors import JSONDecodeError
 
@@ -35,7 +36,7 @@ class APIConnector(object):
         APIConnector class
     """
 
-    def __init__(self, uri, headers=None, auth=None, pagination_key=None, data_key=None):
+    def __init__(self, uri, headers=None, auth=None, pagination_key=None, data_key=None) -> None:
         # Add a trailing slash if its missing
         if not uri.endswith("/"):
             uri = uri + "/"
