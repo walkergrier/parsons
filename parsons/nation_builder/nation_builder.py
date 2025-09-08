@@ -3,6 +3,7 @@ import logging
 import time
 from typing import Any, Dict, Optional, Tuple, cast
 from urllib.parse import parse_qs, urlparse, quote_plus
+from xml.etree.ElementInclude import include
 
 from requests import Response
 
@@ -280,14 +281,15 @@ class NationBuilderV2:
         if not param_dict:
             return {}
 
-        params = []
+        params: list[tuple[str, str]] = []
         for key, value in param_dict.items():
             if isinstance(value, dict):  # Handling complex cases
-                params.append(
-                    {f"{param_name}[{key}][{operator}]": val for operator, val in value.items()}
-                )
+                params += [
+                    (f"{param_name}[{key}][{operator}]", val)
+                    for operator, val in value.items()
+                ]
             else:  # Simple case
-                params[f"{param_name}[{key}]"] = value
+                params.append   ((f"{param_name}[{key}]",value))
         return params
 
     @classmethod
@@ -378,7 +380,7 @@ class NationBuilderV2:
         sideloaded_resources = {
             r: self.sideload_rescource(resp, r)
             for r in resp["data"]["relationships"]
-            if r in sideload or sideload == "all"
+            if r in sideload or sideload == "all" or sideload is True
         }
         resp["data"]["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
         return resp
@@ -424,6 +426,41 @@ class NationBuilderV2:
     def list_relationship(
         self,
     ): ...
+
+    """
+    #*
+    #* ENDPOINTS
+    #*
+    """
+
+    #*
+    #* Automation Enrollments
+
+    def get_automation_enrollments(
+        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource(resource="automation_enrollments", params=params, page_size=page_size, all_results=all_results, **kwargs)
+
+    def show_automation_enrollment(self, id: int | str, params: dict | None = None, **kwargs):
+        return self.show_resource("automation_enrollments", id, params, **kwargs)
+    
+    def post_automation_enrollment(self, payload: dict | None = None, params: dict | None = None):
+        return self.post_resource("automation_enrollments", params, payload)
+    
+    def delete_automation_enrollments(self, id: int | str, params: dict | None = None):
+        return self.delete_resource("automation_enrollments", id, params)
+    
+    #*
+    #* Automations
+
+    def get_automations(
+        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource(resource="automations", params=params, page_size=page_size, all_results=all_results, **kwargs)
+    
+    def show_automationt(self, id: int | str, params: dict | None = None, **kwargs):
+        return self.show_resource("automations", id, params, **kwargs)
+    
 
     #*
     #* Membership Endpoints
@@ -532,7 +569,7 @@ class NationBuilderV2:
     ):
         return self.list_resource("path_steps", params, page_size, all_results, **kwargs)
 
-    def post_path_steps(self, payload: dict | None = None, params: dict | None = None):
+    def post_path_step(self, payload: dict | None = None, params: dict | None = None):
         return self.post_resource("path_steps", params, payload)
 
     def show_path_step(self, id: int | str, params: dict | None = None, **kwargs):
@@ -568,7 +605,7 @@ class NationBuilderV2:
     def get_signups_taggings(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource("signups_taggings", params, page_size, all_results, **kwargs)
+        return self.list_resource("signup_taggings", params, page_size, all_results, **kwargs)
 
     def post_signup_tagging(self, signup_id: str | int, tag_id: str | int, params: dict) -> dict:
         """
@@ -586,9 +623,17 @@ class NationBuilderV2:
             dict
         """
         payload = {"signup_id": signup_id, "tag_id": tag_id}
-        return self.post_resource("signups", params, payload)
+        return self.post_resource("signup_taggings", params, payload)
 
+    #*
     #* Signup Tags
+    def get_signup_tags(
+        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("signup_tags", params, page_size, all_results, **kwargs)
+
+    def show_signup_tag(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
+        return self.show_resource(resource="signup_tags", id=id, params=params, sideload=sideload, **kwargs)
 
     #* Signup Endpoints
 
@@ -618,6 +663,21 @@ class NationBuilderV2:
             keys = ", ".join(required_keys)
             raise ValueError(f"payload dict must contain at least one key of {keys}")
         return self.upsert_resource("signups", payload, params)
+    
+    #*
+    #* List Endpoints
+
+    def get_lists(
+        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+    ):
+        return self.list_resource("lists", params, page_size, all_results, **kwargs)
+    
+    def show_list(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
+        return self.show_resource(resource="lists", id=id, params=params, sideload=sideload, **kwargs)
+    
+    def add_signups_to_list(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
+        return self.show_resource(resource="lists", id=id, params=params, sideload=sideload, **kwargs)
+
 
 
 class NationBuilder:
