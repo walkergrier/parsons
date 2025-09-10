@@ -95,6 +95,7 @@ for module_path, connector_name in (
     ("parsons.twilio.twilio", "Twilio"),
     ("parsons.zoom.zoom", "Zoom"),
     ("parsons.empower.empower", "Empower"),
+    ("parsons.qomon.qomon", "Qomon"),
 ):
     try:
         globals()[connector_name] = getattr(importlib.import_module(module_path), connector_name)
