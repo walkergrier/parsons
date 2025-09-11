@@ -400,7 +400,7 @@ class NationBuilderV2:
         payload = {"data": {"type": resource, "attributes": payload}}
         return self.client.post_request(url, params=params, json=payload)
 
-    def delete_resource(self, resource, id: int | str, params: dict | None = None, url = str | None):
+    def delete_resource(self, resource, id: int | str, params: dict | None = None, url: str | None = None):
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
@@ -624,6 +624,9 @@ class NationBuilderV2:
         """
         payload = {"signup_id": signup_id, "tag_id": tag_id}
         return self.post_resource("signup_taggings", params, payload)
+
+    def delete_signup_tagging(self, id: int | str, params: dict | None = None):
+        return self.delete_resource(resource="signup_taggings", id=id, params=params)
 
     #*
     #* Signup Tags
