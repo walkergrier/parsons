@@ -285,11 +285,10 @@ class NationBuilderV2:
         for key, value in param_dict.items():
             if isinstance(value, dict):  # Handling complex cases
                 params += [
-                    (f"{param_name}[{key}][{operator}]", val)
-                    for operator, val in value.items()
+                    (f"{param_name}[{key}][{operator}]", val) for operator, val in value.items()
                 ]
             else:  # Simple case
-                params.append   ((f"{param_name}[{key}]",value))
+                params.append((f"{param_name}[{key}]", value))
         return params
 
     @classmethod
@@ -326,19 +325,19 @@ class NationBuilderV2:
     def _get_all(self, resp: dict, limit: int = 0, **kwargs) -> Table:
         data = resp["data"]
         while limit <= 0 or len(data) < limit:
-            resp = self._get_next(resp) # type: ignore
+            resp = self._get_next(resp)  # type: ignore
             if resp is None:
                 break
             data += resp["data"]
         return self._to_table(data=data)
 
-    #*
-    #* Resource Methods
+    # *
+    # * Resource Methods
 
     def list_resource(
         self,
         resource: str,
-        params: dict | list[tuple[str,str]] | None = None,
+        params: dict | list[tuple[str, str]] | None = None,
         page_size: int = 100,
         all_results: bool = False,
         url: str | None = None,
@@ -367,23 +366,28 @@ class NationBuilderV2:
         return self._to_table(data=resp["data"])
 
     def show_resource(
-        self, resource: str, id: int | str, params: dict | None  = None, url=None, sideload: list | None  = None
+        self,
+        resource: str,
+        id: int | str,
+        params: dict | None = None,
+        url: str | None = None,
+        sideload: list | bool = False,
     ) -> dict:
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
         resp = self.client.get_request(url, params=params)
 
-        if not sideload:
-            return resp
+        if sideload is False:
+            return resp["data"]
 
         sideloaded_resources = {
             r: self.sideload_rescource(resp, r)
             for r in resp["data"]["relationships"]
-            if r in sideload or sideload == "all" or sideload is True
+            if sideload is True or (isinstance(sideload, list) and r in sideload)
         }
         resp["data"]["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
-        return resp
+        return resp["data"]
 
     def sideload_rescource(self, resp, resource):
         link = resp["data"]["relationships"][resource]["links"]["related"]
@@ -392,7 +396,9 @@ class NationBuilderV2:
         url, params = self._urlparse(url=link)
         return self.list_resource(resource=resource, params=params, url=url, all_results=True)
 
-    def post_resource(self, resource, params: dict | None , payload: dict | None , url: str | None = None):
+    def post_resource(
+        self, resource, params: dict | None, payload: dict | None, url: str | None = None
+    ):
         if not url:
             url = resource
         if not isinstance(payload, dict):
@@ -400,7 +406,9 @@ class NationBuilderV2:
         payload = {"data": {"type": resource, "attributes": payload}}
         return self.client.post_request(url, params=params, json=payload)
 
-    def delete_resource(self, resource, id: int | str, params: dict | None = None, url: str | None = None):
+    def delete_resource(
+        self, resource, id: int | str, params: dict | None = None, url: str | None = None
+    ):
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
@@ -433,106 +441,165 @@ class NationBuilderV2:
     #*
     """
 
-    #*
-    #* Automation Enrollments
+    # *
+    # * Automation Enrollments
 
     def get_automation_enrollments(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource(resource="automation_enrollments", params=params, page_size=page_size, all_results=all_results, **kwargs)
+        return self.list_resource(
+            resource="automation_enrollments",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
     def show_automation_enrollment(self, id: int | str, params: dict | None = None, **kwargs):
         return self.show_resource("automation_enrollments", id, params, **kwargs)
-    
+
     def post_automation_enrollment(self, payload: dict | None = None, params: dict | None = None):
         return self.post_resource("automation_enrollments", params, payload)
-    
+
     def delete_automation_enrollments(self, id: int | str, params: dict | None = None):
         return self.delete_resource("automation_enrollments", id, params)
-    
-    #*
-    #* Automations
+
+    # *
+    # * Automations
 
     def get_automations(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource(resource="automations", params=params, page_size=page_size, all_results=all_results, **kwargs)
-    
-    def show_automationt(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("automations", id, params, **kwargs)
-    
+        return self.list_resource(
+            resource="automations",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
-    #*
-    #* Membership Endpoints
+    def show_automationt(self, id: int | str, params: dict | None = None, **kwargs):
+        return self.show_resource(resource="automations", id=id, params=params, **kwargs)
+
+    # *
+    # * Membership Endpoints
 
     def get_memberships(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource(resource="memberships", params=params, page_size=page_size, all_results=all_results, **kwargs)
+        return self.list_resource(
+            resource="memberships",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
-    def show_membership(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("membrships", id, params, **kwargs)
+    def show_membership(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="membrships", id=id, params=params, sideload=sideload, **kwargs
+        )
 
     def post_membership(self, payload: dict | None = None, params: dict | None = None):
-        return self.post_resource("memberships", params, payload)
+        return self.post_resource(resource="memberships", params=params, payload=payload)
 
     def delete_membership(self, id: int | str, params: dict | None = None):
-        return self.delete_resource("path_membership", id, params)
+        return self.delete_resource(resource="membership", id=id, params=params)
 
-    def patch_membrship(self, id: int | str, payload: dict | None = None, params: dict | None = None):
-        return self.patch_resource("path_membership", id, params, payload)
+    def patch_membership(
+        self, id: int | str, payload: dict | None = None, params: dict | None = None
+    ):
+        return self.patch_resource(resource="membership", id=id, params=params, payload=payload)
 
-    #*
-    #* Path Histories Endpoints
+    # *
+    # * Path Histories Endpoints
 
     def get_path_histories(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource("path_histories", params, page_size, all_results, **kwargs)
+        return self.list_resource(
+            resource="path_histories",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
-    def show_path_history(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("path_histories", id, params, **kwargs)
+    def show_path_history(
+        self, id: int | str, params: dict | None = None, sideload=False, **kwargs
+    ):
+        return self.show_resource(
+            resource="path_histories", id=id, params=params, sideload=sideload, **kwargs
+        )
 
-    #*
-    #* Path Journey Status Changes Endpoints
+    # *
+    # * Path Journey Status Changes Endpoints
 
     def get_path_journey_status_changes(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource(
-            "path_journey_status_changes", params, page_size, all_results, **kwargs
+            resource="path_journey_status_changes",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
         )
 
-    def post_path_journey_status_change(self, payload: dict | None = None, params: dict | None = None):
-        return self.post_resource("path_journey_status_changes", params, payload)
+    def post_path_journey_status_change(
+        self, payload: dict | None = None, params: dict | None = None
+    ):
+        return self.post_resource(
+            resource="path_journey_status_changes", params=params, payload=payload
+        )
 
-    def show_path_journey_status_change(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("path_journey_status_changes", id, params, **kwargs)
+    def show_path_journey_status_change(
+        self, id: int | str, params: dict | None = None, sideload=False, **kwargs
+    ):
+        return self.show_resource(
+            resource="path_journey_status_changes",
+            id=id,
+            params=params,
+            sideload=sideload,
+            **kwargs,
+        )
 
     def delete_path_journey_status_change(self, id: int | str, params: dict | None = None):
-        return self.delete_resource("path_journey_status_changes", id, params)
+        return self.delete_resource(resource="path_journey_status_changes", id=id, params=params)
 
     def patch_path_journey_status_change(
         self, id: int | str, payload: dict | None = None, params: dict | None = None
     ):
-        return self.patch_resource("path_journey_status_changes", id, params, payload)
+        return self.patch_resource(
+            resource="path_journey_status_changes", id=id, params=params, payload=payload
+        )
 
-    #*
-    #* Path Journeys Endpoints
+    # *
+    # * Path Journeys Endpoints
 
     def get_path_journeys(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource("path_journeys", params, page_size, all_results, **kwargs)
+        return self.list_resource(
+            resource="path_journeys",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
     def post_path_journey(self, payload: dict | None = None, params: dict | None = None):
-        return self.post_resource("path_journeys", params, payload)
+        return self.post_resource(resource="path_journeys", params=params, payload=payload)
 
-    def show_path_journey(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("path_journey", id, params, **kwargs)
+    def show_path_journey(
+        self, id: int | str, params: dict | None = None, sideload=False, **kwargs
+    ):
+        return self.show_resource(
+            resource="path_journey", id=id, params=params, sideload=sideload, **kwargs
+        )
 
     def patch_path_journey(self, id: int | str, payload: dict, params: dict | None = None):
-        return self.patch_resource("path_journey", id, params, payload)
+        return self.patch_resource(resource="path_journey", id=id, params=params, payload=payload)
 
     def abandon_path_journey(
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
@@ -562,37 +629,49 @@ class NationBuilderV2:
         id = int(id)
         return self.client.patch_request(f"path_journeys/{id}/void", params=params)
 
-    #* Path Step Endpoints
+    # * Path Step Endpoints
 
     def get_path_steps(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource("path_steps", params, page_size, all_results, **kwargs)
+        return self.list_resource(
+            resource="path_steps",
+            params=params,
+            page_size=page_size,
+            all_results=all_results,
+            **kwargs,
+        )
 
     def post_path_step(self, payload: dict | None = None, params: dict | None = None):
-        return self.post_resource("path_steps", params, payload)
+        return self.post_resource(resource="path_steps", params=params, payload=payload)
 
-    def show_path_step(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource("path_steps", id, params, **kwargs)
+    def show_path_step(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="path_steps", id=id, params=params, sideload=sideload, **kwargs
+        )
 
     def delete_path_step(self, id: int | str, params: dict | None = None):
-        return self.delete_resource("path_steps", id, params)
+        return self.delete_resource(resource="path_steps", id=id, params=params)
 
     def patch_path_step(self, id: int | str, payload: dict, params: dict | None = None):
         return self.patch_resource(resource="path_steps", id=id, params=params, payload=payload)
 
-    #* Path Endpoints
+    # * Path Endpoints
 
     def get_paths(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
-        return self.list_resource(resource="paths", params=params, page_size=page_size, all_results=all_results, **kwargs)
+        return self.list_resource(
+            resource="paths", params=params, page_size=page_size, all_results=all_results, **kwargs
+        )
 
     def post_path(self, payload: dict | None = None, params: dict | None = None):
         return self.post_resource(resource="paths", params=params, payload=payload)
 
-    def show_path(self, id: int | str, params: dict | None = None, **kwargs):
-        return self.show_resource(resource="paths", id=id, params=params, **kwargs)
+    def show_path(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="paths", id=id, params=params, sideload=sideload, **kwargs
+        )
 
     def delete_path(self, id: int | str, params: dict | None = None):
         return self.delete_resource(resource="paths", id=id, params=params)
@@ -600,14 +679,14 @@ class NationBuilderV2:
     def patch_path(self, id: int | str, payload: dict, params: dict | None = None):
         return self.patch_resource(resource="paths", id=id, params=params, payload=payload)
 
-    #* Signup Taggings Endpoints
+    # * Signup Taggings Endpoints
 
     def get_signups_taggings(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource("signup_taggings", params, page_size, all_results, **kwargs)
 
-    def post_signup_tagging(self, signup_id: str | int, tag_id: str | int, params: dict) -> dict:
+    def post_signup_tagging(self, signup_id: str | int, tag_id: str | int, params: dict | None = None) -> dict:
         """
         Creates a signup tagging from given data
 
@@ -628,27 +707,34 @@ class NationBuilderV2:
     def delete_signup_tagging(self, id: int | str, params: dict | None = None):
         return self.delete_resource(resource="signup_taggings", id=id, params=params)
 
-    #*
-    #* Signup Tags
+    # *
+    # * Signup Tags
     def get_signup_tags(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource("signup_tags", params, page_size, all_results, **kwargs)
 
-    def show_signup_tag(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
-        return self.show_resource(resource="signup_tags", id=id, params=params, sideload=sideload, **kwargs)
+    def show_signup_tag(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="signup_tags", id=id, params=params, sideload=sideload, **kwargs
+        )
 
-    #* Signup Endpoints
+    # * Signup Endpoints
 
     def get_signups(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource("signups", params, page_size, all_results, **kwargs)
+    
+    def show_signup(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="signups", id=id, params=params, sideload=sideload, **kwargs
+        )
 
     def post_signup(self, payload: dict, params: dict) -> dict:
         return self.post_resource("signups", params, payload)
 
-    def patch_signup(self, payload: dict, params: dict) -> dict:
+    def push_signup(self, payload: dict, params: dict) -> dict:
         required_keys = [
             "civicrm_id",
             "county_file_id",
@@ -666,21 +752,34 @@ class NationBuilderV2:
             keys = ", ".join(required_keys)
             raise ValueError(f"payload dict must contain at least one key of {keys}")
         return self.upsert_resource("signups", payload, params)
-    
-    #*
-    #* List Endpoints
+
+    def patch_signup(self, id: int | str, payload: dict, params: dict | None = None):
+        return self.patch_resource(resource="signups", id=id, params=params, payload=payload)
+
+    def show_me(self, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="signups", id=0, params=params, sideload=sideload, url="signups/me", **kwargs
+        )
+
+    # *
+    # * List Endpoints
 
     def get_lists(
         self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
     ):
         return self.list_resource("lists", params, page_size, all_results, **kwargs)
-    
-    def show_list(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
-        return self.show_resource(resource="lists", id=id, params=params, sideload=sideload, **kwargs)
-    
-    def add_signups_to_list(self, id: int | str, params: dict | None = None, sideload=None, **kwargs):
-        return self.show_resource(resource="lists", id=id, params=params, sideload=sideload, **kwargs)
 
+    def show_list(self, id: int | str, params: dict | None = None, sideload=False, **kwargs):
+        return self.show_resource(
+            resource="lists", id=id, params=params, sideload=sideload, **kwargs
+        )
+
+    def add_signups_to_list(
+        self, id: int | str, params: dict | None = None, sideload=False, **kwargs
+    ):
+        return self.show_resource(
+            resource="lists", id=id, params=params, sideload=sideload, **kwargs
+        )
 
 
 class NationBuilder:
