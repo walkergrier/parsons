@@ -220,46 +220,29 @@ class NationBuilderV1:
 
 
 class NationBuilderV2:
-    def __init__(
-        self,
-        slug: str | None = None,
-        access_token: str | None = None,
-        refresh_token: str | None = None,
-        client_id: str | None = None,
-        client_secret: str | None = None,
-        redirect_uri: str | None = None,
-    ) -> None:
-        # slug = check_env.check("NB_SLUG", slug)
-        # token = check_env.check("NB_ACCESS_TOKEN", access_token)
-        # refresh_token = check_env.check("NB_REFRESH_TOKEN", refresh_token)
-
+    def __init__(self, slug: str, access_token: str) -> None:
         self.client = APIConnector(
             NationBuilderV2.get_uri(slug=slug),
             headers=NationBuilderV2.get_auth_headers(access_token=access_token),
             data_key="data",
         )
 
-    @classmethod
-    def get_uri(cls, slug: str | None) -> str:
+    @staticmethod
+    def get_uri(slug: str) -> str:
         if slug is None:
             raise ValueError("slug can't None")
-
         if not isinstance(slug, str):
             raise ValueError("slug must be an str")
-
         if len(slug.strip()) == 0:
             raise ValueError("slug can't be an empty str")
-
         return f"https://{slug}.nationbuilder.com/api/v2/"
 
-    @classmethod
-    def get_auth_headers(cls, access_token: str | None) -> dict[str, str]:
+    @staticmethod
+    def get_auth_headers(access_token: str) -> dict[str, str]:
         if access_token is None:
             raise ValueError("access_token can't None")
-
         if not isinstance(access_token, str):
             raise ValueError("access_token must be an str")
-
         if len(access_token.strip()) == 0:
             raise ValueError("access_token can't be an empty str")
         headers = {
@@ -270,18 +253,39 @@ class NationBuilderV2:
         return headers
 
     @classmethod
-    def _to_table(cls, data) -> Table:
+    def _to_table(cls, data: dict) -> Table:
+        """
+        Converts a list of dictionary API resources into a Table object.
+        Flattens the 'attributes' key into the main dictionary.
+
+        Args:
+            data (list[dict]): A list of resource dictionaries from the API.
+
+        Returns:
+            Table: A Table object containing the formatted data.
+        """
         result: list[dict] = [
-            {"id": i["id"], "type": i["type"]} | i["attributes"]
-            if "attributes" in i.keys()
-            else {"id": i["id"], "type": i["type"]}
-            for i in data
+            {"id": i["id"], "type": i["type"]} | i.get("attributes", {}) for i in data
         ]
         return Table(result)
 
     @classmethod
-    def _param_builder(cls, param_name: str, param_dict: dict[str, Any] | Any) -> list[tuple]:
-        """Convert param dictionary into NationBuilder's param format."""
+    def _param_builder(
+        cls,
+        param_name: str,
+        param_dict: dict[str, Any] | Any,
+    ) -> list[tuple]:
+        """
+        Converts a parameter dictionary into NationBuilder's specific param format.
+        Handles simple and nested structures.
+
+        Args:
+            param_name (str): The base name for the parameter (e.g., 'filter').
+            param_dict (dict[str, Any]): The dictionary of parameters to format.
+
+        Returns:
+            list[tuple]: A list of (key, value) tuples formatted for the API request.
+        """
         params: list = []
         if not param_dict:
             return params
@@ -302,27 +306,53 @@ class NationBuilderV2:
 
     @staticmethod
     def _urlparse(url: str, params_as_dict: bool = False) -> tuple[str, list[tuple] | dict]:
+        """
+        Parses a URL string to separate the path from the query parameters.
+
+        Args:
+            url (str): The full or partial URL to parse.
+            params_as_dict (bool): If True, returns query parameters as a dict.
+                                   If False, returns them as a list of tuples.
+
+        Returns:
+            tuple[str, list[tuple] | dict]: A tuple containing the URL path and the parsed parameters.
+        """
         if url.startswith("/api/v2/"):
             url = url[len("/api/v2/") :]
         parsed_url: ParseResult = urlparse(url=url)
+        query = parsed_url.query
+        if not query:
+            return parsed_url.path, {} if params_as_dict else []
         if params_as_dict:
-            try:
-                params_dict: dict = {
-                    i.split("=")[0]: i.split("=")[1] for i in parsed_url.query.split("&")
-                }
-                return parsed_url.path, params_dict
-            except Exception as e:
-                logger.error(e)
-        params_list: list = [tuple(i.split("=")) for i in parsed_url.query.split("&")]
-        return parsed_url.path, params_list
+            return parsed_url.path, dict(p.split(sep="=", maxsplit=1) for p in query.split(sep="&"))
+        return parsed_url.path, [tuple(p.split(sep="=", maxsplit=1)) for p in query.split(sep="&")]
 
-    def _get_next(self, resp, **kwargs) -> Response | dict | None:
+    def _get_next(self, resp: dict) -> Response | dict | None:
+        """
+        Fetches the next page of results from a paginated API response.
+
+        Args:
+            resp (dict): The current API response dictionary which may contain a 'next' link.
+
+        Returns:
+            dict | None: The API response for the next page, or None if there is no next page.
+        """
         if "links" in resp and "next" in resp["links"]:
             url, params = self._urlparse(url=resp["links"]["next"])
             resp = self.client.get_request(url, params=params)
             return resp
 
-    def _get_all(self, resp: dict, limit: int = 0, **kwargs) -> Table:
+    def _get_all(self, resp: dict, limit: int = 0) -> Table:
+        """
+        Fetches all pages of results from a paginated API response, up to a specified limit.
+
+        Args:
+            resp (dict): The initial API response.
+            limit (int): The maximum number of records to retrieve. If 0, all records are fetched.
+
+        Returns:
+            Table: A Table object containing all the aggregated data.
+        """
         data = resp["data"]
         while limit <= 0 or len(data) < limit:
             resp = self._get_next(resp=resp)  # type: ignore
@@ -342,15 +372,32 @@ class NationBuilderV2:
         resource: str,
         filters: dict | None = None,
         params: dict | list[tuple] | None = None,
-        page_size: int = 100,
         all_results: bool = False,
-        url: str | None = None,
+        url: str = "",
+        page_size: int = 100,
         limit: int = 0,
         raw_resp: bool = False,
         # raw_json: bool = False,
         count: bool = False,
         **kwargs,
     ) -> Table:
+        """
+        Lists records for a given resource, with options for filtering and pagination.
+
+        Args:
+            resource (str): The name of the resource to list (e.g., 'people', 'lists').
+            filters (dict | None): A dictionary of filters to apply to the query.
+            params (dict | list[tuple] | None): Additional query parameters.
+            all_results (bool): If True, fetches all pages of results.
+            url (str): A specific URL to use instead of the resource name.
+            page_size (int): The number of results to return per page (max 100).
+            limit (int): The maximum number of results to return when all_results is True.
+            raw_resp (bool): If True, returns the raw API response dictionary.
+            count (bool): If True, requests the total count of matching records.
+
+        Returns:
+            Table | dict: A Table of results, or a raw dictionary if raw_resp is True.
+        """
         if not url:
             url = resource
         if not params:
@@ -382,6 +429,20 @@ class NationBuilderV2:
         sideload: list[str] | str | bool = False,
         sideload_params: dict | None = None,
     ) -> dict:
+        """
+        Retrieves a single resource record by its ID.
+
+        Args:
+            resource (str): The name of the resource.
+            id (int | str): The unique ID of the record.
+            params (dict | None): Additional query parameters.
+            url (str): A specific URL to use instead of the resource name and ID.
+            sideload (list[str] | str | bool): Sideload related resources.
+                                              True for all, or a list of specific relations.
+
+        Returns:
+            dict: A dictionary representing the resource.
+        """
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
@@ -404,14 +465,42 @@ class NationBuilderV2:
         resp["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
         return resp
 
-    def sideload_rescource(self, resp, resource: str) -> Table:
+    def sideload_rescource(self, resp: dict, resource: str) -> Table:
+        """
+        Fetches and sideloads a related resource from a relationship link.
+
+        Args:
+            resp (dict): The primary resource's response dictionary.
+            resource (str): The name of the relationship to sideload.
+
+        Returns:
+            Table | None: A Table of the related resources, or None if the link is not present.
+        """
         link: str | None = resp["relationships"][resource]["links"]["related"]
         if not link:
             return None
         url, params = self._urlparse(url=link, params_as_dict=False)
         return self.list_resource(resource=resource, params=params, url=url, all_results=True)
 
-    def post_resource(self, resource, params: dict | None, payload: dict | None, url: str = ""):
+    def post_resource(
+        self,
+        resource: str,
+        params: dict | None,
+        payload: dict,
+        url: str = "",
+    ):
+        """
+        Creates a new resource record.
+
+        Args:
+            resource (str): The name of the resource to create.
+            payload (dict): The attributes for the new record.
+            params (dict | None): Additional query parameters.
+            url (str): A specific URL to use for the POST request.
+
+        Returns:
+            dict: The API response for the creation request.
+        """
         if not url:
             url = resource
         if not isinstance(payload, dict):
@@ -419,25 +508,39 @@ class NationBuilderV2:
         payload = {"data": {"type": resource, "attributes": payload}}
         return self.client.post_request(url, params=params, json=payload)
 
-    def delete_resource(
-        self,
-        resource,
-        id: int | str,
-        params: dict | None = None,
-        url: str = "",
-    ):
+    def delete_resource(self, resource, id: int | str, params: dict | None = None, url: str = ""):
+        """
+        Deletes a resource record by its ID.
+
+        Args:
+            resource (str): The name of the resource.
+            id (int | str): The ID of the record to delete.
+            params (dict | None): Additional query parameters.
+            url (str): A specific URL to use for the DELETE request.
+
+        Returns:
+            dict: The API response.
+        """
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
         return self.client.delete_request(url, params=params)
 
     def upsert_resource(
-        self,
-        resource: str,
-        payload: dict,
-        params: dict | list[tuple] | None,
-        url: str = "",
+        self, resource: str, payload: dict, params: dict | list[tuple] | None, url: str = ""
     ):
+        """
+        Creates or updates a resource record using the '/push' endpoint.
+
+        Args:
+            resource (str): The name of the resource.
+            payload (dict): The attributes for the record to upsert.
+            params (dict | list[tuple] | None): Additional query parameters.
+            url (str): A specific URL to use for the request.
+
+        Returns:
+            dict: The API response.
+        """
         if not url:
             url = f"{resource}/push"
         if not isinstance(payload, dict):
@@ -453,6 +556,19 @@ class NationBuilderV2:
         payload: dict | None,
         url: str = "",
     ):
+        """
+        Updates an existing resource record.
+
+        Args:
+            resource (str): The name of the resource.
+            id (int | str): The ID of the record to update.
+            payload (dict): The attributes to update on the record.
+            params (dict | list[tuple] | None): Additional query parameters.
+            url (str): A specific URL to use for the PATCH request.
+
+        Returns:
+            dict: The API response.
+        """
         id = int(id)
         if not url:
             url = f"{resource}/{id}"
@@ -468,14 +584,10 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_automation_enrollments(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
-            resource="automation_enrollments",
-            params=params,
-            page_size=page_size,
-            all_results=all_results,
-            **kwargs,
+            resource="automation_enrollments", params=params, all_results=all_results, **kwargs
         )
 
     def show_automation_enrollment(
@@ -483,7 +595,7 @@ class NationBuilderV2:
     ) -> dict:
         return self.show_resource(resource="automation_enrollments", id=id, params=params, **kwargs)
 
-    def post_automation_enrollment(self, payload: dict | None = None, params: dict | None = None):
+    def post_automation_enrollment(self, payload: dict, params: dict | None = None):
         return self.post_resource(resource="automation_enrollments", params=params, payload=payload)
 
     def delete_automation_enrollments(self, id: int | str, params: dict | None = None):
@@ -496,14 +608,10 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_automations(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
-            resource="automations",
-            params=params,
-            page_size=page_size,
-            all_results=all_results,
-            **kwargs,
+            resource="automations", params=params, all_results=all_results, **kwargs
         )
 
     def show_automationt(self, id: int | str, params: dict | None = None, **kwargs) -> dict:
@@ -516,14 +624,10 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_memberships(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
-            resource="memberships",
-            params=params,
-            page_size=page_size,
-            all_results=all_results,
-            **kwargs,
+            resource="memberships", params=params, all_results=all_results, **kwargs
         )
 
     def show_membership(
@@ -559,14 +663,10 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_path_histories(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
-            resource="path_histories",
-            params=params,
-            page_size=page_size,
-            all_results=all_results,
-            **kwargs,
+            resource="path_histories", params=params, all_results=all_results, **kwargs
         )
 
     def show_path_history(
@@ -587,19 +687,13 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_path_journey_status_changes(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
-            resource="path_journey_status_changes",
-            params=params,
-            page_size=page_size,
-            all_results=all_results,
-            **kwargs,
+            resource="path_journey_status_changes", params=params, all_results=all_results, **kwargs
         )
 
-    def post_path_journey_status_change(
-        self, payload: dict | None = None, params: dict | None = None
-    ):
+    def post_path_journey_status_change(self, payload: dict, params: dict | None = None):
         return self.post_resource(
             resource="path_journey_status_changes", params=params, payload=payload
         )
@@ -636,17 +730,16 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_path_journeys(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
             resource="path_journeys",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             **kwargs,
         )
 
-    def post_path_journey(self, payload: dict | None = None, params: dict | None = None):
+    def post_path_journey(self, payload: dict, params: dict | None = None):
         return self.post_resource(resource="path_journeys", params=params, payload=payload)
 
     def show_path_journey(
@@ -666,21 +759,19 @@ class NationBuilderV2:
     def abandon_path_journey(
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
     ):
+        id = int(id)
         if not params:
             params = {}
-        if not path_journey_status_change_id:
-            params["path_journey_status_change_id"] = int(path_journey_status_change_id)
-        id = int(id)
+        params["path_journey_status_change_id"] = int(path_journey_status_change_id)
         return self.client.patch_request(f"path_journeys/{id}/abandon", params=params)
 
     def complete_path_journey(
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
     ):
+        id = int(id)
         if not params:
             params = {}
-        if not path_journey_status_change_id:
-            params["path_journey_status_change_id"] = int(path_journey_status_change_id)
-        id = int(id)
+        params["path_journey_status_change_id"] = int(path_journey_status_change_id)
         return self.client.patch_request(f"path_journeys/{id}/complete", params=params)
 
     def reactivate_path_journey(self, id: int | str, params: dict | None = None):
@@ -698,17 +789,16 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_path_steps(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
             resource="path_steps",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             **kwargs,
         )
 
-    def post_path_step(self, payload: dict | None = None, params: dict | None = None):
+    def post_path_step(self, payload: dict, params: dict | None = None):
         return self.post_resource(resource="path_steps", params=params, payload=payload)
 
     def show_path_step(
@@ -734,14 +824,12 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_paths(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
-    ) -> Table:
+    def get_paths(self, params: dict | None = None, all_results: bool = False, **kwargs) -> Table:
         return self.list_resource(
-            resource="paths", params=params, page_size=page_size, all_results=all_results, **kwargs
+            resource="paths", params=params, all_results=all_results, **kwargs
         )
 
-    def post_path(self, payload: dict | None = None, params: dict | None = None):
+    def post_path(self, payload: dict, params: dict | None = None):
         return self.post_resource(resource="paths", params=params, payload=payload)
 
     def show_path(
@@ -768,12 +856,11 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_signups_taggings(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
             resource="signup_taggings",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             **kwargs,
         )
@@ -808,12 +895,11 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_signup_tags(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
+        self, params: dict | None = None, all_results: bool = False, **kwargs
     ) -> Table:
         return self.list_resource(
             resource="signup_tags",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             **kwargs,
         )
@@ -835,13 +921,10 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_signups(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
-    ) -> Table:
+    def get_signups(self, params: dict | None = None, all_results: bool = False, **kwargs) -> Table:
         return self.list_resource(
             resource="signups",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             **kwargs,
         )
@@ -885,11 +968,9 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_lists(
-        self, params: dict | None = None, page_size: int = 100, all_results: bool = False, **kwargs
-    ) -> Table:
+    def get_lists(self, params: dict | None = None, all_results: bool = False, **kwargs) -> Table:
         return self.list_resource(
-            resource="lists", params=params, page_size=page_size, all_results=all_results, **kwargs
+            resource="lists", params=params, all_results=all_results, **kwargs
         )
 
     def show_list(
@@ -946,17 +1027,11 @@ class NationBuilderV2:
         )
 
     def list_signups_on_list(
-        self,
-        id,
-        params: dict | None = None,
-        page_size: int = 100,
-        all_results: bool = True,
-        **kwargs,
+        self, id: int | str, params: dict | None = None, all_results: bool = True, **kwargs
     ) -> Table:
         return self.list_resource(
             resource="lists",
             params=params,
-            page_size=page_size,
             all_results=all_results,
             url=f"lists/{id}/signups",
             **kwargs,
@@ -969,26 +1044,18 @@ class NationBuilder:
         slug: str | None = None,
         access_token: str | None = None,
         parsons_version: str = "v1",
-        # refresh_token: Optional[str] = None,
-        # client_id: Optional[str] = None,
-        # client_secret: Optional[str] = None,
-        # redirect_uri: Optional[str] = None,
     ) -> NationBuilderV1 | NationBuilderV2:
+        if checked_version := check_env.check("NB_PARSONS_VERSION", None, True):
+            parsons_version = checked_version
         if parsons_version == "v1":
-            parsons_version = check_env.check("NB_PARSONS_VERSION", None, True)
-        if parsons_version == "v1":
-            logger.info("Consider upgrading to version 2 of the NationBuilder connector!")
+            logger.info(msg="Consider upgrading to version 2 of the NationBuilder connector!")
             logger.info(
-                "See docs for more information: https://move-coop.github.io/parsons/html/latest/nation_builder.html"
+                msg="See docs for more information: https://move-coop.github.io/parsons/html/latest/nation_builder.html"
             )
             return NationBuilderV1(slug=slug, access_token=access_token)
         if parsons_version == "v2":
             return NationBuilderV2(
                 slug=check_env.check("NB_SLUG", slug),
                 access_token=check_env.check("NB_ACCESS_TOKEN", access_token),
-                # refresh_token=refresh_token,
-                # client_id=client_id,
-                # client_secret=client_secret,
-                # redirect_uri=redirect_uri,
             )
         raise ValueError(f"{parsons_version} not supported")
