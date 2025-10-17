@@ -252,8 +252,8 @@ class NationBuilderV2:
         }
         return headers
 
-    @classmethod
-    def _to_table(cls, data: dict) -> Table:
+    @staticmethod
+    def _to_table(data: dict) -> Table:
         """
         Converts a list of dictionary API resources into a Table object.
         Flattens the 'attributes' key into the main dictionary.
@@ -269,9 +269,8 @@ class NationBuilderV2:
         ]
         return Table(result)
 
-    @classmethod
+    @staticmethod
     def _param_builder(
-        cls,
         param_name: str,
         param_dict: dict[str, Any] | Any,
     ) -> list[tuple]:

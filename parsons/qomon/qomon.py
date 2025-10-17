@@ -11,7 +11,7 @@ class Qomon:
     def __init__(self, api_key: str | None = None) -> None:
         token: str = check_env.check("QOMON_API_KEY", api_key)
         headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json"}
-        headers.update(Qomon.get_auth_headers(token))
+        headers.update(Qomon.get_auth_headers(api_key=token))
         self.client = APIConnector(
             uri="https://incoming.qomon.app/", headers=headers, data_key="data"
         )
@@ -20,13 +20,10 @@ class Qomon:
     def get_auth_headers(api_key: str | None) -> dict[str, str]:
         if api_key is None:
             raise ValueError("access_token can't None")
-
         if not isinstance(api_key, str):
             raise ValueError("access_token must be an str")
-
         if len(api_key.strip()) == 0:
             raise ValueError("access_token can't be an empty str")
-
         return {"Authorization": f"Bearer {api_key}"}
 
     def parser_resp(self, url: str, key: str, to_table: bool = False) -> Table:
@@ -46,7 +43,7 @@ class Qomon:
         return self.parser_resp(url=f"forms/{type}", key="forms", to_table=to_table)
 
     def search(self):
-        payload = {
+        payload: dict = {
             "data": {
                 "advanced_search": {
                     "per_page": 1000,
