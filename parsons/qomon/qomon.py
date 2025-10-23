@@ -42,14 +42,12 @@ class Qomon:
     def get_forms_by_type(self, type: str, to_table: bool = True) -> Table:
         return self.parser_resp(url=f"forms/{type}", key="forms", to_table=to_table)
 
-    def search(self):
-        payload: dict = {
-            "data": {
-                "advanced_search": {
-                    "per_page": 1000,
-                    "query": {
-                        "$all": [],
-                    },
-                },
-            },
-        }
+    def search(self, query: dict | None = None, to_table: bool = True):
+        if not query:
+            query = {"$all": []}
+        payload: dict = {"data": {"advanced_search": {"per_page": 1000, "query": query}}}
+        resp = self.client.post_request(url="search", json=payload)
+        data: dict = self.client.data_parse(resp)["contacts"]
+        if to_table:
+            return self.client.convert_to_table(data)
+        return data
