@@ -528,7 +528,7 @@ class NationBuilderV2:
         return self.client.delete_request(url, params=params)
 
     def upsert_resource(
-        self, resource: str, payload: dict, params: dict | list[tuple] | None, url: str = ""
+        self, resource: str, payload: dict, params: dict | list[tuple] | None = None, url: str = ""
     ):
         """
         Creates or updates a resource record using the '/push' endpoint.
@@ -542,6 +542,8 @@ class NationBuilderV2:
         Returns:
             dict: The API response.
         """
+        if not params:
+            params = {}
         if not url:
             url = f"{resource}/push"
         if not isinstance(payload, dict):
@@ -1314,7 +1316,9 @@ class NationBuilderV2:
     def post_signup(self, payload: dict, params: dict) -> dict:
         return self.post_resource(resource="signups", params=params, payload=payload)
 
-    def patch_signup(self, payload: dict, params: dict) -> dict:
+    def push_signup(self, payload: dict, params: dict | None = None) -> dict:
+        if not params:
+            params = {}
         required_keys: list[str] = [
             "civicrm_id",
             "county_file_id",
