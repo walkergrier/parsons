@@ -810,7 +810,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    # * Event
+    # * Events
 
     # * ####################################################################################### * #
 
@@ -1111,6 +1111,27 @@ class NationBuilderV2:
 
     def patch_path_journey(self, id: int | str, payload: dict, params: dict | None = None):
         return self.patch_resource(resource="path_journey", id=id, params=params, payload=payload)
+
+    # * ####################################################################################### * #
+
+    # * Path Journeys Status Changes
+
+    # * ####################################################################################### * #
+
+    def path_journey_status_changes(
+        self,
+        filters: dict | None = None,
+        params: dict | None = None,
+        all_results: bool = False,
+        **kwargs,
+    ) -> Table:
+        return self.list_resource(
+            resource="path_journey_status_changes",
+            filters=filters,
+            params=params,
+            all_results=all_results,
+            **kwargs,
+        )
 
     def abandon_path_journey(
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
