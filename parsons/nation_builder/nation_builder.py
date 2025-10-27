@@ -642,9 +642,7 @@ class NationBuilderV2:
         )
 
     def post_contact(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="contacts", params=params, payload=payload
-        )
+        return self.post_resource(resource="contacts", params=params, payload=payload)
 
     def show_contact(
         self,
@@ -660,12 +658,8 @@ class NationBuilderV2:
     def delete_contact(self, id: int | str, params: dict | None = None):
         return self.delete_resource(resource="contacts", id=id, params=params)
 
-    def patch_contact(
-        self, id: int | str, payload: dict | None = None, params: dict | None = None
-    ):
-        return self.patch_resource(
-            resource="contacts", id=id, params=params, payload=payload
-        )
+    def patch_contact(self, id: int | str, payload: dict | None = None, params: dict | None = None):
+        return self.patch_resource(resource="contacts", id=id, params=params, payload=payload)
 
     # * ####################################################################################### * #
 
@@ -736,9 +730,7 @@ class NationBuilderV2:
         )
 
     def post_donation(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="donations", params=params, payload=payload
-        )
+        return self.post_resource(resource="donations", params=params, payload=payload)
 
     def show_donation(
         self,
@@ -757,9 +749,7 @@ class NationBuilderV2:
     def patch_donation(
         self, id: int | str, payload: dict | None = None, params: dict | None = None
     ):
-        return self.patch_resource(
-            resource="donations", id=id, params=params, payload=payload
-        )
+        return self.patch_resource(resource="donations", id=id, params=params, payload=payload)
 
     # * ####################################################################################### * #
 
@@ -783,9 +773,7 @@ class NationBuilderV2:
         )
 
     def post_event_rsvp(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="event_rsvps", params=params, payload=payload
-        )
+        return self.post_resource(resource="event_rsvps", params=params, payload=payload)
 
     def show_event_rsvp(
         self,
@@ -804,9 +792,7 @@ class NationBuilderV2:
     def patch_event_rsvps(
         self, id: int | str, payload: dict | None = None, params: dict | None = None
     ):
-        return self.patch_resource(
-            resource="event_rsvps", id=id, params=params, payload=payload
-        )
+        return self.patch_resource(resource="event_rsvps", id=id, params=params, payload=payload)
 
     # * ####################################################################################### * #
 
@@ -830,9 +816,7 @@ class NationBuilderV2:
         )
 
     def post_event(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="events", params=params, payload=payload
-        )
+        return self.post_resource(resource="events", params=params, payload=payload)
 
     def show_event(
         self,
@@ -848,13 +832,8 @@ class NationBuilderV2:
     def delete_event(self, id: int | str, params: dict | None = None):
         return self.delete_resource(resource="events", id=id, params=params)
 
-    def patch_event(
-        self, id: int | str, payload: dict | None = None, params: dict | None = None
-    ):
-        return self.patch_resource(
-            resource="events", id=id, params=params, payload=payload
-        )
-
+    def patch_event(self, id: int | str, payload: dict | None = None, params: dict | None = None):
+        return self.patch_resource(resource="events", id=id, params=params, payload=payload)
 
     # * ####################################################################################### * #
 
@@ -878,9 +857,7 @@ class NationBuilderV2:
         )
 
     def post_membership_types(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="membership_types", params=params, payload=payload
-        )
+        return self.post_resource(resource="membership_types", params=params, payload=payload)
 
     def show_membership_type(
         self,
@@ -902,7 +879,6 @@ class NationBuilderV2:
         return self.patch_resource(
             resource="membership_types", id=id, params=params, payload=payload
         )
-
 
     # * ####################################################################################### * #
 
@@ -966,9 +942,7 @@ class NationBuilderV2:
         )
 
     def post_page(self, payload: dict, params: dict | None = None):
-        return self.post_resource(
-            resource="pages", params=params, payload=payload
-        )
+        return self.post_resource(resource="pages", params=params, payload=payload)
 
     def show_page(
         self,
@@ -984,12 +958,8 @@ class NationBuilderV2:
     def delete_page(self, id: int | str, params: dict | None = None):
         return self.delete_resource(resource="pages", id=id, params=params)
 
-    def patch_page(
-        self, id: int | str, payload: dict | None = None, params: dict | None = None
-    ):
-        return self.patch_resource(
-            resource="pages", id=id, params=params, payload=payload
-        )
+    def patch_page(self, id: int | str, payload: dict | None = None, params: dict | None = None):
+        return self.patch_resource(resource="pages", id=id, params=params, payload=payload)
 
     # * ####################################################################################### * #
 
@@ -1363,8 +1333,25 @@ class NationBuilderV2:
         id: int | str,
         params: dict | None = None,
         sideload: list[str] | str | bool = False,
+        extra_fields: list[str] | str | bool = True,
         **kwargs,
     ) -> dict:
+        if isinstance(extra_fields, str):
+            extra_fields = [extra_fields]
+        if extra_fields is True:
+            extra_fields = [
+                "billing_address",
+                "mailing_address",
+                "home_address",
+                "primary_address",
+                "registered_address",
+                "user_submitted_address",
+                "work_address",
+                "profile_image_url",
+            ]
+
+        if p
+
         return self.show_resource(
             resource="signups", id=id, params=params, sideload=sideload, **kwargs
         )
