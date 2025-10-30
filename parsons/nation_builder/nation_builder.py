@@ -369,8 +369,8 @@ class NationBuilderV2:
         url: str = "",
         params: dict | None = None,
     ) -> int:
-        url = resource if not url else url
-        params = {} if not params else params
+        url = url if url else resource
+        params = params if params else {}
         params = params | {"stats[total]": "count", "page[size]": 1}
         resp = self.client.get_request(url, params=params)
         return resp["meta"]["stats"]["total"]["count"]
@@ -406,8 +406,8 @@ class NationBuilderV2:
         Returns:
             Table | dict: A Table of results, or a raw dictionary if raw_resp is True.
         """
-        url = resource if not url else url
-        params = {} if not params else params
+        url = url if url else resource
+        params = params if params else {}
 
         if isinstance(params, dict):
             params["page[size]"] = min(100, max(1, page_size))
@@ -451,14 +451,14 @@ class NationBuilderV2:
             dict: A dictionary representing the resource.
         """
         id = int(id)
-        url = f"{resource}/{id}" if not url else url
+        url = url if url else f"{resource}/{id}"
         resp = self.client.get_request(url, params=params)["data"]
 
         if sideload is False:
             return resp
 
         sideload = [sideload] if isinstance(sideload, str) else sideload
-        sideload_params = {} if not sideload_params else sideload_params
+        sideload_params = sideload_params if sideload_params else {}
 
         sideloaded_resources: dict = {
             r: self._sideload_rescource(resp=resp, resource=r)
@@ -505,7 +505,7 @@ class NationBuilderV2:
         Returns:
             dict: The API response for the creation request.
         """
-        url = resource if not url else url
+        url = url if url else resource
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = {"data": {"type": resource, "attributes": payload}}
@@ -525,7 +525,7 @@ class NationBuilderV2:
             dict: The API response.
         """
         id = int(id)
-        url = f"{resource}/{id}" if not url else url
+        url = url if url else f"{resource}/{id}"
         return self.client.delete_request(url, params=params)
 
     def _upsert_resource(
@@ -543,8 +543,8 @@ class NationBuilderV2:
         Returns:
             dict: The API response.
         """
-        url = f"{resource}/push" if not url else url
-        params = {} if not params else params
+        url = url if url else f"{resource}/push"
+        params = params if params else {}
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = {"data": {"type": resource, "attributes": payload}}
@@ -572,7 +572,7 @@ class NationBuilderV2:
             dict: The API response.
         """
         id = int(id)
-        url = f"{resource}/{id}" if not url else url
+        url = url if url else f"{resource}/{id}"
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = {"data": {"id": id, "type": resource, "attributes": payload}}
@@ -1232,7 +1232,7 @@ class NationBuilderV2:
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
     ):
         id = int(id)
-        params = {} if not params else params
+        params = params if params else {}
         params["path_journey_status_change_id"] = int(path_journey_status_change_id)
         return self.client.patch_request(f"path_journeys/{id}/abandon", params=params)
 
@@ -1240,7 +1240,7 @@ class NationBuilderV2:
         self, id: int | str, path_journey_status_change_id: int | str, params: dict | None = None
     ):
         id = int(id)
-        params = {} if not params else params
+        params = params if params else {}
         params["path_journey_status_change_id"] = int(path_journey_status_change_id)
         return self.client.patch_request(f"path_journeys/{id}/complete", params=params)
 
@@ -1431,7 +1431,7 @@ class NationBuilderV2:
         return self._post_resource(resource="signups", params=params, payload=payload)
 
     def push_signup(self, payload: dict, params: dict | None = None) -> dict:
-        params = {} if not params else params
+        params = params if params else {}
         required_keys: list[str] = [
             "civicrm_id",
             "county_file_id",
