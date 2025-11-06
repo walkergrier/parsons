@@ -453,6 +453,10 @@ class NationBuilderV2:
         id = int(id)
         url = url if url else f"{resource}/{id}"
         resp = self.client.get_request(url, params=params)["data"]
+        resp |= resp.pop("attributes")
+        relationships = resp.pop("relationships")
+        resp["relationships"] = relationships
+
 
         if sideload is False:
             return resp
