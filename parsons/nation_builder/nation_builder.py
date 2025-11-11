@@ -457,7 +457,6 @@ class NationBuilderV2:
         relationships = resp.pop("relationships")
         resp["relationships"] = relationships
 
-
         if sideload is False:
             return resp
 
@@ -945,16 +944,13 @@ class NationBuilderV2:
         payload: dict[str, dict] = {
             "data": {"id": list_id, "type": "lists", "signup_ids": signup_ids}
         }
-        return self._patch_resource(
-            resource="lists",
-            id=list_id,
-            params=params,
-            payload=payload,
+        return self.client.patch_request(
             url=f"lists/{id}/add_signups",
-            **kwargs,
+            params=params,
+            json=payload,
         )
 
-    def remove_signups_signups_list(
+    def remove_signups_from_list(
         self,
         list_id: int | str,
         signup_ids: list[str | int] | str | int,
@@ -965,13 +961,10 @@ class NationBuilderV2:
         payload: dict[str, dict] = {
             "data": {"id": list_id, "type": "lists", "signup_ids": signup_ids}
         }
-        return self._patch_resource(
-            resource="lists",
-            id=list_id,
-            params=params,
-            payload=payload,
+        return self.client.patch_request(
             url=f"lists/{id}/remove_signups",
-            **kwargs,
+            params=params,
+            json=payload,
         )
 
     def get_signups_on_list(
