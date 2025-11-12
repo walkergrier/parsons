@@ -1,12 +1,15 @@
 import logging
 import urllib.parse
 
+from requests import Response, Session
 from requests import request as _request
-from requests import Response
+from requests.adapters import HTTPAdapter
 from requests.exceptions import HTTPError
 from simplejson.errors import JSONDecodeError
+from urllib3.util.retry import Retry
 
 from parsons import Table
+from parsons.utilities import check_env
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +39,48 @@ class APIConnector:
         APIConnector class
     """
 
-    def __init__(self, uri, headers=None, auth=None, pagination_key=None, data_key=None) -> None:
+    def __init__(self, uri, headers=None, auth=None, pagination_key=None, data_key=None, as_session=None, default_timeout=10) -> None:
         # Add a trailing slash if its missing
         if not uri.endswith("/"):
             uri = uri + "/"
 
+        # If 'as_session' is 'None' the value will default to the env variable, True/False logic will override env variable
+        if as_session is None:
+            self.as_session = check_env.check("PARSONS_AS_SESSION", as_session, True)
+        else:
+            self.as_session = as_session
+
         self.uri = uri
-        self.headers = headers
-        self.auth = auth
+        # self.headers = headers
+        # self.auth = auth
         self.pagination_key = pagination_key
         self.data_key = data_key
 
-    def request(self, url, req_type, json=None, data=None, params=None):
+        if self.as_session:
+            retry_strategy = Retry(
+                total=3,  # Total number of retries
+                backoff_factor=1,  # Exponential backoff: 1s, 2s, 4s, ...
+                # Retry on connection errors (default) and these status codes:
+                # status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods={"HEAD", "GET", "PUT", "DELETE", "PATCH"}
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+
+            self.session = Session()
+            self.session.mount(prefix="https://", adapter=adapter)
+            self.session.mount(prefix="http://", adapter=adapter)
+
+            self.default_timeout: int = default_timeout
+
+            if headers:
+                self.session.headers.update(headers)
+            if auth:
+                self.session.auth = auth
+        else:
+            self.headers = headers
+            self.auth = auth
+
+    def request(self, url, req_type, json=None, data=None, params=None, timeout: int | None = None) -> Response:
         """
         Base request using requests libary.
 
@@ -75,15 +108,26 @@ class APIConnector:
         """
         full_url = urllib.parse.urljoin(self.uri, url)
 
-        return _request(
-            req_type,
-            full_url,
-            headers=self.headers,
-            auth=self.auth,
-            json=json,
-            data=data,
-            params=params,
-        )
+        if self.as_session:
+            effective_timeout: int | None = timeout if timeout is not None else self.default_timeout
+            return self.session.request(
+                method=req_type,
+                url=full_url,
+                json=json,
+                data=data,
+                params=params,
+                timeout=effective_timeout,
+            )
+        else:
+            return _request(
+                req_type,
+                full_url,
+                headers=self.headers,
+                auth=self.auth,
+                json=json,
+                data=data,
+                params=params,
+            )
 
     def get_request(self, url, params=None, return_format="json"):
         """

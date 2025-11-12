@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from typing import Any, Dict, cast
+from typing import Any, cast
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from requests import Response
@@ -34,7 +34,7 @@ class NationBuilderV1:
         headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json"}
         headers.update(NationBuilderV1.get_auth_headers(access_token=token))
 
-        self.client = APIConnector(NationBuilderV1.get_uri(slug=slug), headers=headers)
+        self.client: APIConnector = APIConnector(NationBuilderV1.get_uri(slug=slug), headers=headers)
 
     @classmethod
     def get_uri(cls, slug: str | None) -> str:
@@ -219,7 +219,7 @@ class NationBuilderV1:
 
 class NationBuilderV2:
     def __init__(self, slug: str, access_token: str) -> None:
-        self.client = APIConnector(
+        self.client: APIConnector = APIConnector(
             NationBuilderV2.get_uri(slug=slug),
             headers=NationBuilderV2.get_auth_headers(access_token=access_token),
             data_key="data",
@@ -1477,6 +1477,10 @@ class NationBuilderV2:
         return self._show_resource(
             resource="signups", id=id, params=params, sideload=sideload, **kwargs
         )
+
+    def show_me(self, params: dict | None = None):
+        # id does nothing
+        return self._show_resource(id=0, resource="signups", params=params, url="signups/me")
 
 
 class NationBuilder:
