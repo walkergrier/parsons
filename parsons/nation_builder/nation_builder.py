@@ -34,7 +34,9 @@ class NationBuilderV1:
         headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json"}
         headers.update(NationBuilderV1.get_auth_headers(access_token=token))
 
-        self.client: APIConnector = APIConnector(NationBuilderV1.get_uri(slug=slug), headers=headers)
+        self.client: APIConnector = APIConnector(
+            NationBuilderV1.get_uri(slug=slug), headers=headers
+        )
 
     @classmethod
     def get_uri(cls, slug: str | None) -> str:
@@ -269,8 +271,9 @@ class NationBuilderV2:
 
     @staticmethod
     def _param_builder(
+        values: dict[str, Any] | Any,
         param_name: str,
-        param_dict: dict[str, Any] | Any,
+        resource: str,
     ) -> list[tuple]:
         """
         Converts a parameter dictionary into NationBuilder's specific param format.
@@ -283,33 +286,39 @@ class NationBuilderV2:
         Returns:
             list[tuple]: A list of (key, value) tuples formatted for the API request.
         """
-        params: list = []
-        if not param_dict:
+
+        if param_name == "include":
+            return [(param_name, ",".join(values) if isinstance(values, list) else values)]
+
+        if param_name == "filter":
+            params: list = []
+            for key, value in values.items():  # Handling complex cases
+                if isinstance(value, dict):
+                    params.extend(
+                        [
+                            (f"{param_name}[{key}][{operator}]", val)
+                            for operator, val in value.items()
+                        ]
+                    )
+                else:  # Simple case
+                    params.append((f"{param_name}[{key}]", value))
             return params
-        for key, value in param_dict.items():
-            if isinstance(value, dict):  # Handling complex cases
-                params += [
-                    (f"{param_name}[{key}][{operator}]", val) for operator, val in value.items()
-                ]
-            else:  # Simple case
-                params.append((f"{param_name}[{key}]", value))
-        return params
+
+        else:
+            return [
+                (
+                    f"{param_name}[{resource}]",
+                    [",".join(map(str, values)) if isinstance(values, list) else values],
+                )
+            ]
 
     @staticmethod
-    def _params_formatter(p: str, resource: str, fields: str | list) -> dict:
-        if not fields:
-            return {}
-        return {f"{p}[{resource}]": fields}
-
-    @staticmethod
-    def _urlparse(url: str, params_as_dict: bool = False) -> tuple[str, list[tuple] | dict]:
+    def _urlparse(url: str) -> tuple[str, list[tuple]]:
         """
         Parses a URL string to separate the path from the query parameters.
 
         Args:
             url (str): The full or partial URL to parse.
-            params_as_dict (bool): If True, returns query parameters as a dict.
-                                   If False, returns them as a list of tuples.
 
         Returns:
             tuple[str, list[tuple] | dict]: A tuple containing the URL path and the parsed parameters.
@@ -318,12 +327,10 @@ class NationBuilderV2:
         parsed_url: ParseResult = urlparse(url=url)
         query: str = parsed_url.query
         if not query:
-            return parsed_url.path, {} if params_as_dict else []
-        if params_as_dict:
-            return parsed_url.path, dict(p.split(sep="=", maxsplit=1) for p in query.split(sep="&"))
+            return parsed_url.path, []
         return parsed_url.path, [tuple(p.split(sep="=", maxsplit=1)) for p in query.split(sep="&")]
 
-    def _get_next(self, resp: dict) -> Response | dict | None:
+    def get_next(self, resp: dict | Response) -> tuple | None:
         """
         Fetches the next page of results from a paginated API response.
 
@@ -333,10 +340,13 @@ class NationBuilderV2:
         Returns:
             dict | None: The API response for the next page, or None if there is no next page.
         """
+        if isinstance(resp, Response):
+            resp = resp.json()
         if "links" in resp and "next" in resp["links"]:
             url, params = self._urlparse(url=resp["links"]["next"])
-            resp = self.client.get_request(url, params=params)
-            return resp
+            return url, params
+        else:
+            return None, None
 
     def _get_all(self, resp: dict, limit: int = 0) -> Table:
         """
@@ -351,10 +361,11 @@ class NationBuilderV2:
         """
         data = resp["data"]
         while limit <= 0 or len(data) < limit:
-            resp = self._get_next(resp=resp)  # type: ignore
-            if resp is None:
+            url, params = self.get_next(resp=resp)
+            if url is None:
                 break
-            data += resp["data"]
+            resp = self.client.get_request(url, params=params)
+            data.extend(resp["data"])
         return self._to_table(data=data)
 
     # * ####################################################################################### * #
@@ -366,12 +377,23 @@ class NationBuilderV2:
     def count_resource(
         self,
         resource: str,
+        filters: dict | None = None,
         url: str = "",
         params: dict | None = None,
     ) -> int:
         url = url if url else resource
-        params = params if params else {}
-        params = params | {"stats[total]": "count", "page[size]": 1}
+        params = list(params.items()) if params else []
+        if filters:
+            params.extend(
+                self._param_builder(values=filters, param_name="filter", resource=resource)
+            )
+        params.extend(
+            [
+                (f"fields{resource}", "id"),
+                ("stats[total]", "count"),
+                ("page[size]", 1),
+            ]
+        )
         resp = self.client.get_request(url, params=params)
         return resp["meta"]["stats"]["total"]["count"]
 
@@ -379,14 +401,16 @@ class NationBuilderV2:
         self,
         resource: str,
         filters: dict | None = None,
+        fields: list | str | None = None,
+        extra_fields: list | str | None = None,
+        include: list | str | None = None,
         params: dict | list[tuple] | None = None,
         all_results: bool = False,
         url: str = "",
         page_size: int = 100,
         limit: int = 0,
         raw_resp: bool = False,
-        # raw_json: bool = False,
-        count: bool = False,
+        debug_params: bool = False,
         **kwargs,
     ) -> Table:
         """
@@ -407,22 +431,33 @@ class NationBuilderV2:
             Table | dict: A Table of results, or a raw dictionary if raw_resp is True.
         """
         url = url if url else resource
-        params = params if params else {}
 
+        if not params:
+            params = []
         if isinstance(params, dict):
-            params["page[size]"] = min(100, max(1, page_size))
-            if count:
-                params["stats[total]"] = "count"
             params = list(params.items())
+        params.append(("page[size]", min(100, max(1, page_size))))
 
-        if filters:
-            params += self._param_builder(param_name="filter", param_dict=filters)
+        param_matrix: dict = {
+            "filter": filters,
+            "fields": fields,
+            "extra_fields": extra_fields,
+            "include": include,
+        }
+
+        for param_name, values in param_matrix.items():
+            if values is not None:
+                params.extend(
+                    self._param_builder(values=values, param_name=param_name, resource=resource)
+                )
+
+        if debug_params:
+            return params
 
         if raw_resp:
             return self.client.request(url, req_type="GET", params=params)
 
         resp = self.client.get_request(url, params=params)
-
         if all_results:
             return self._get_all(resp=resp, limit=limit)
         return self._to_table(data=resp["data"])
@@ -431,7 +466,10 @@ class NationBuilderV2:
         self,
         resource: str,
         id: int | str,
-        params: dict | None = None,
+        fields: list | str | None = None,
+        extra_fields: list | str | None = None,
+        include: list | str | None = None,
+        params: dict | list[tuple] | None = None,
         url: str = "",
         sideload: list[str] | str | bool = False,
         sideload_params: dict | None = None,
@@ -445,13 +483,30 @@ class NationBuilderV2:
             params (dict | None): Additional query parameters.
             url (str): A specific URL to use instead of the resource name and ID.
             sideload (list[str] | str | bool): Sideload related resources.
-                                              True for all, or a list of specific relations.
+                                                True for all, or a list of specific relations.
 
         Returns:
             dict: A dictionary representing the resource.
         """
         id = int(id)
         url = url if url else f"{resource}/{id}"
+        if not params:
+            params = []
+        if isinstance(params, dict):
+            params = list(params.items())
+
+        param_matrix: dict = {
+            "fields": fields,
+            "extra_fields": extra_fields,
+            "include": include,
+        }
+
+        for param_name, values in param_matrix.items():
+            if values is not None:
+                params.extend(
+                    self._param_builder(values=values, param_name=param_name, resource=resource)
+                )
+
         resp = self.client.get_request(url, params=params)["data"]
         resp |= resp.pop("attributes")
         relationships = resp.pop("relationships")
@@ -464,7 +519,7 @@ class NationBuilderV2:
         sideload_params = sideload_params if sideload_params else {}
 
         sideloaded_resources: dict = {
-            r: self._sideload_rescource(resp=resp, resource=r)
+            r: self._sideload_resource(resp=resp, resource=r)
             for r in resp["relationships"]
             if sideload is True or r in sideload
             for r in resp["relationships"]
@@ -472,7 +527,7 @@ class NationBuilderV2:
         resp["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
         return resp
 
-    def _sideload_rescource(self, resp: dict, resource: str) -> Table:
+    def _sideload_resource(self, resp: dict, resource: str) -> Table:
         """
         Fetches and sideloads a related resource from a relationship link.
 
@@ -486,7 +541,7 @@ class NationBuilderV2:
         link: str | None = resp["relationships"][resource]["links"]["related"]
         if not link:
             return None
-        url, params = self._urlparse(url=link, params_as_dict=False)
+        url, params = self._urlparse(url=link)
         return self._list_resource(resource=resource, params=params, url=url, all_results=True)
 
     def _post_resource(
@@ -588,13 +643,23 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_automation_enrollments(
-        self, params: dict | None = None, all_results: bool = False, **kwargs
+        self,
+        fields: list | str | None = None,
+        include: list | str | None = None,
+        params: dict | None = None,
+        all_results: bool = False,
+        **kwargs,
     ) -> Table:
         """
         Lists all automation enrollments
         """
         return self._list_resource(
-            resource="automation_enrollments", params=params, all_results=all_results, **kwargs
+            resource="automation_enrollments",
+            fields=fields,
+            include=include,
+            params=params,
+            all_results=all_results,
+            **kwargs,
         )
 
     def post_automation_enrollment(self, payload: dict, params: dict | None = None):
@@ -628,13 +693,25 @@ class NationBuilderV2:
     # * ####################################################################################### * #
 
     def get_automations(
-        self, params: dict | None = None, all_results: bool = False, **kwargs
+        self,
+        fields: list | str | None = None,
+        extra_fields: list | str | None = None,
+        include: list | str | None = None,
+        params: dict | None = None,
+        all_results: bool = False,
+        **kwargs,
     ) -> Table:
         """
         Lists all automations
         """
         return self._list_resource(
-            resource="automations", params=params, all_results=all_results, **kwargs
+            resource="automations",
+            fields=fields,
+            extra_fields=extra_fields,
+            include=include,
+            params=params,
+            all_results=all_results,
+            **kwargs,
         )
 
     def show_automationt(self, id: int | str, params: dict | None = None, **kwargs) -> dict:
@@ -652,6 +729,8 @@ class NationBuilderV2:
     def get_contacts(
         self,
         filters: dict | None = None,
+        fields: list | str | None = None,
+        include: list | str | None = None,
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
@@ -662,6 +741,8 @@ class NationBuilderV2:
         return self._list_resource(
             resource="contacts",
             filters=filters,
+            fields=fields,
+            include=include,
             params=params,
             all_results=all_results,
             **kwargs,
