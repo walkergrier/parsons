@@ -4,6 +4,7 @@ import time
 from typing import Any, cast
 from urllib.parse import ParseResult, parse_qs, urlparse
 
+from attr import field
 from requests import Response
 
 from parsons import Table  # pyright: ignore[reportMissingImports]
@@ -245,7 +246,7 @@ class NationBuilderV2:
             raise ValueError("access_token must be an str")
         if len(access_token.strip()) == 0:
             raise ValueError("access_token can't be an empty str")
-        headers = {
+        headers: dict[str, str] = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "authorization": f"Bearer {access_token}",
@@ -253,7 +254,7 @@ class NationBuilderV2:
         return headers
 
     @staticmethod
-    def _to_table(data: dict) -> Table:
+    def _to_table(data: list[dict]) -> Table:
         """
         Converts a list of dictionary API resources into a Table object.
         Flattens the 'attributes' key into the main dictionary.
@@ -330,7 +331,7 @@ class NationBuilderV2:
             return parsed_url.path, []
         return parsed_url.path, [tuple(p.split(sep="=", maxsplit=1)) for p in query.split(sep="&")]
 
-    def get_next(self, resp: dict | Response) -> tuple | None:
+    def get_next(self, resp: dict | Response) -> tuple[str, list[tuple]] | tuple[None, None]:
         """
         Fetches the next page of results from a paginated API response.
 
@@ -341,9 +342,11 @@ class NationBuilderV2:
             dict | None: The API response for the next page, or None if there is no next page.
         """
         if isinstance(resp, Response):
-            resp = resp.json()
-        if "links" in resp and "next" in resp["links"]:
-            url, params = self._urlparse(url=resp["links"]["next"])
+            resp_dict: dict = resp.json()
+        else:
+            resp_dict: dict = resp
+        if "links" in resp_dict and "next" in resp_dict["links"]:
+            url, params = self._urlparse(url=resp_dict["links"]["next"])
             return url, params
         else:
             return None, None
@@ -359,7 +362,7 @@ class NationBuilderV2:
         Returns:
             Table: A Table object containing all the aggregated data.
         """
-        data = resp["data"]
+        data: list[dict] = resp["data"]
         while limit <= 0 or len(data) < limit:
             url, params = self.get_next(resp=resp)
             if url is None:
@@ -382,19 +385,19 @@ class NationBuilderV2:
         params: dict | None = None,
     ) -> int:
         url = url if url else resource
-        params = list(params.items()) if params else []
+        params_list: list[tuple] = list(params.items()) if params else []
         if filters:
-            params.extend(
+            params_list.extend(
                 self._param_builder(values=filters, param_name="filter", resource=resource)
             )
-        params.extend(
+        params_list.extend(
             [
                 (f"fields{resource}", "id"),
                 ("stats[total]", "count"),
                 ("page[size]", 1),
             ]
         )
-        resp = self.client.get_request(url, params=params)
+        resp = self.client.get_request(url, params=params_list)
         return resp["meta"]["stats"]["total"]["count"]
 
     def _list_resource(
@@ -457,7 +460,7 @@ class NationBuilderV2:
         if raw_resp:
             return self.client.request(url, req_type="GET", params=params)
 
-        resp = self.client.get_request(url, params=params)
+        resp: dict = self.client.get_request(url, params=params)
         if all_results:
             return self._get_all(resp=resp, limit=limit)
         return self._to_table(data=resp["data"])
@@ -507,10 +510,10 @@ class NationBuilderV2:
                     self._param_builder(values=values, param_name=param_name, resource=resource)
                 )
 
-        resp = self.client.get_request(url, params=params)["data"]
+        resp: dict = self.client.get_request(url, params=params)["data"]
         resp |= resp.pop("attributes")
         relationships = resp.pop("relationships")
-        resp["relationships"] = relationships
+        resp["relationships"] = relationships  # I want the relationships at the end of the dict
 
         if sideload is False:
             return resp
@@ -1295,12 +1298,13 @@ class NationBuilderV2:
     def show_path_journey(
         self,
         id: int | str,
+        fields: list | str | None = None,
         params: dict | None = None,
         sideload: list[str] | str | bool = False,
         **kwargs,
     ) -> dict:
         return self._show_resource(
-            resource="path_journeys", id=id, params=params, sideload=sideload, **kwargs
+            resource="path_journeys", id=id, fields=fields, params=params, sideload=sideload, **kwargs
         )
 
     def update_path_journey(self, id: int | str, payload: dict, params: dict | None = None):
@@ -1357,12 +1361,13 @@ class NationBuilderV2:
     def show_path_step(
         self,
         id: int | str,
+        fields: list | str | None = None,
         params: dict | None = None,
         sideload: list[str] | str | bool = False,
         **kwargs,
     ) -> dict:
         return self._show_resource(
-            resource="path_steps", id=id, params=params, sideload=sideload, **kwargs
+            resource="path_steps", id=id, fields=fields, params=params, sideload=sideload, **kwargs
         )
 
     def delete_path_step(self, id: int | str, params: dict | None = None):
@@ -1394,12 +1399,13 @@ class NationBuilderV2:
     def show_path(
         self,
         id: int | str,
+        fields: list | str | None = None,
         params: dict | None = None,
         sideload: list[str] | str | bool = False,
         **kwargs,
     ) -> dict:
         return self._show_resource(
-            resource="paths", id=id, params=params, sideload=sideload, **kwargs
+            resource="paths", id=id, fields=fields, params=params, sideload=sideload, **kwargs
         )
 
     def delete_path(self, id: int | str, params: dict | None = None):
@@ -1429,6 +1435,19 @@ class NationBuilderV2:
             **kwargs,
         )
 
+    def show_signup_tagging(
+        self,
+        id: int | str,
+        fields: list | str | None = None,
+        params: dict | None = None,
+        sideload: list[str] | str | bool = False,
+        **kwargs,
+    ) -> dict:
+        return self._show_resource(
+            resource="signup_taggings", id=id, fields=fields, params=params, sideload=sideload, **kwargs
+        )
+
+
     def post_signup_tagging(
         self, signup_id: str | int, tag_id: str | int, params: dict | None = None
     ) -> dict:
@@ -1446,7 +1465,7 @@ class NationBuilderV2:
         `Returns:`
             dict
         """
-        payload = {"signup_id": signup_id, "tag_id": tag_id}
+        payload: dict[str, str | int] = {"signup_id": signup_id, "tag_id": tag_id}
         return self._post_resource(resource="signup_taggings", params=params, payload=payload)
 
     def delete_signup_tagging(self, id: int | str, params: dict | None = None):
