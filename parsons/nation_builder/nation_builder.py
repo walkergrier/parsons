@@ -439,7 +439,9 @@ class NationBuilderV2:
             params = []
         if isinstance(params, dict):
             params = list(params.items())
-        params.append(("page[size]", min(100, max(1, page_size))))
+        params.append(
+            ("page[size]", min(100, max(1, page_size))),
+            )
 
         param_matrix: dict = {
             "filter": filters,
@@ -1304,7 +1306,12 @@ class NationBuilderV2:
         **kwargs,
     ) -> dict:
         return self._show_resource(
-            resource="path_journeys", id=id, fields=fields, params=params, sideload=sideload, **kwargs
+            resource="path_journeys",
+            id=id,
+            fields=fields,
+            params=params,
+            sideload=sideload,
+            **kwargs,
         )
 
     def update_path_journey(self, id: int | str, payload: dict, params: dict | None = None):
@@ -1444,9 +1451,13 @@ class NationBuilderV2:
         **kwargs,
     ) -> dict:
         return self._show_resource(
-            resource="signup_taggings", id=id, fields=fields, params=params, sideload=sideload, **kwargs
+            resource="signup_taggings",
+            id=id,
+            fields=fields,
+            params=params,
+            sideload=sideload,
+            **kwargs,
         )
-
 
     def post_signup_tagging(
         self, signup_id: str | int, tag_id: str | int, params: dict | None = None
@@ -1532,14 +1543,20 @@ class NationBuilderV2:
         required_keys: list[str] = [
             "civicrm_id",
             "county_file_id",
+            "datatrust_id",
             "dw_id",
-            "external_id",
             "email",
-            "facebook_username",
+            "external_id",
+            "mobile_number",
             "ngp_id",
+            "pf_strat_id",
+            "phone_number",
+            "rnc_id",
+            "rnc_regid",
             "salesforce_id",
-            "twitter_login",
+            "state_file_id",
             "van_id",
+            "work_phone_number",
         ]
         has_required_key: bool = any(x in payload for x in required_keys)
         if not has_required_key:
