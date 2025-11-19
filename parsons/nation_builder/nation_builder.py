@@ -441,7 +441,7 @@ class NationBuilderV2:
             params = list(params.items())
         params.append(
             ("page[size]", min(100, max(1, page_size))),
-            )
+        )
 
         param_matrix: dict = {
             "filter": filters,
@@ -1427,7 +1427,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_signups_taggings(
+    def get_signup_taggings(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1566,6 +1566,11 @@ class NationBuilderV2:
 
     def upsert_signup(self, **kwargs):
         return self.push_signup(**kwargs)
+
+    def update_signup(
+        self, id: int | str, payload: dict | None = None, params: dict | None = None
+    ):
+        return self._patch_resource(resource="signups", id=id, params=params, payload=payload)
 
     def show_signup(
         self,

@@ -135,17 +135,16 @@ class APIConnector:
                 params=params,
                 timeout=req_timeout,
             )
-        else:
-            return _request(
-                method=req_type,
-                url=full_url,
-                headers=self.headers,
-                auth=self.auth,
-                json=json,
-                data=data,
-                params=params,
-                timeout=timeout,  #! Since we've added a `timeout` parameter, it can be used here
-            )
+        return _request(
+            method=req_type,
+            url=full_url,
+            headers=self.headers,
+            auth=self.auth,
+            json=json,
+            data=data,
+            params=params,
+            timeout=timeout,  #! Since we've added a `timeout` parameter, it can be used here
+        )
 
     def get_request(self, url: str, params: dict | None = None, return_format: str = "json"):
         """
