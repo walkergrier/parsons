@@ -351,7 +351,7 @@ class NationBuilderV2:
         else:
             return None, None
 
-    def _get_all(self, resp: dict, limit: int = 0) -> Table:
+    def _fetch_all(self, resp: dict, limit: int = 0) -> Table:
         """
         Fetches all pages of results from a paginated API response, up to a specified limit.
 
@@ -364,7 +364,7 @@ class NationBuilderV2:
         """
         data: list[dict] = resp["data"]
         while limit <= 0 or len(data) < limit:
-            url, params = self.get_next(resp=resp)
+            url, params = self.fetch_next(resp=resp)
             if url is None:
                 break
             resp = self.client.get_request(url, params=params)
@@ -464,7 +464,7 @@ class NationBuilderV2:
 
         resp: dict = self.client.get_request(url, params=params)
         if all_results:
-            return self._get_all(resp=resp, limit=limit)
+            return self._fetch_all(resp=resp, limit=limit)
         return self._to_table(data=resp["data"])
 
     def _show_resource(
@@ -647,7 +647,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_automation_enrollments(
+    def fetch_automation_enrollments(
         self,
         fields: list | str | None = None,
         include: list | str | None = None,
@@ -697,7 +697,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_automations(
+    def fetch_automations(
         self,
         fields: list | str | None = None,
         extra_fields: list | str | None = None,
@@ -731,7 +731,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_contacts(
+    def fetch_contacts(
         self,
         filters: dict | None = None,
         fields: list | str | None = None,
@@ -793,7 +793,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_donation_tracking_codes(
+    def fetch_donation_tracking_codes(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -855,7 +855,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_donations(
+    def fetch_donations(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -913,7 +913,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_event_rsvps(
+    def fetch_event_rsvps(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -956,7 +956,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_events(
+    def fetch_events(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -997,7 +997,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_lists(
+    def fetch_lists(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1053,7 +1053,7 @@ class NationBuilderV2:
             json=payload,
         )
 
-    def get_signups_on_list(
+    def fetch_signups_on_list(
         self, id: int | str, params: dict | None = None, all_results: bool = True, **kwargs
     ) -> Table:
         return self._list_resource(
@@ -1070,7 +1070,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_membership_types(
+    def fetch_membership_types(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1115,7 +1115,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_memberships(
+    def fetch_memberships(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1155,7 +1155,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_pages(
+    def fetch_pages(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1196,7 +1196,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_path_histories(
+    def fetch_path_histories(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1228,7 +1228,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_path_journey_status_changes(
+    def fetch_path_journey_status_changes(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1279,7 +1279,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_path_journeys(
+    def fetch_path_journeys(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1347,7 +1347,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_path_steps(
+    def fetch_path_steps(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1389,7 +1389,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_paths(
+    def fetch_paths(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1427,7 +1427,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_signup_taggings(
+    def fetch_signup_taggings(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1488,7 +1488,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_signup_tags(
+    def fetch_signup_tags(
         self,
         filters: dict | None = None,
         params: dict | None = None,
@@ -1520,7 +1520,7 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def get_signups(
+    def fetch_signups(
         self,
         filters: dict | None = None,
         params: dict | None = None,
