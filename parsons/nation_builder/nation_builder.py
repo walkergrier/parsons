@@ -227,6 +227,70 @@ class NationBuilderV2:
             headers=NationBuilderV2.get_auth_headers(access_token=access_token),
             data_key="data",
         )
+        self.resources: tuple[str] = (
+            # "async_processes",
+            "automation_enrollments",
+            "automations",
+            # "ballots",
+            # "broadcasters",
+            "contacts",
+            # "custom_fields",
+            "donation_tracking_codes",
+            "donations",
+            # "elections",
+            "event_rsvps",
+            # "event_ticket_levels",
+            "events",
+            # "imports",
+            "lists",
+            # "mailings",
+            "membership_types",
+            "memberships",
+            "pages",
+            "path_histories",
+            "path_journey_status_changes",
+            "path_journeys",
+            "path_steps",
+            "paths",
+            # "petition_signatures",
+            # "petitions",
+            # "pledges",
+            # "precincts",
+            # "relationships",
+            # "signup_profiles",
+            "signup_taggings",
+            "signup_tags",
+            "signups",
+            # "survey_question_possible_responses",
+            # "survey_question_responses",
+            # "survey_questions",
+            # "surveys",
+            # "voters",
+        )
+        self.__resources_not_implemented_functional: tuple[str] = (
+            "ballots",
+            "broadcasters",
+            "custom_fields",
+            "elections",
+            "event_ticket_levels",
+            "imports",
+            "mailings",
+            "petition_signatures",
+            "petitions",
+            "pledges",
+            "precincts",
+            "relationships",
+            "signup_profiles",
+            "survey_question_possible_responses",
+            "survey_question_responses",
+            "survey_questions",
+            "surveys",
+            "voters",
+        )
+        self.__resources_not_implemented_nonfunctional: tuple[str] = (
+            "async_processes",
+        )
+        
 
     @staticmethod
     def get_uri(slug: str) -> str:
@@ -331,7 +395,7 @@ class NationBuilderV2:
             return parsed_url.path, []
         return parsed_url.path, [tuple(p.split(sep="=", maxsplit=1)) for p in query.split(sep="&")]
 
-    def get_next(self, resp: dict | Response) -> tuple[str, list[tuple]] | tuple[None, None]:
+    def fetch_next(self, resp: dict | Response) -> tuple[str, list[tuple]] | tuple[None, None]:
         """
         Fetches the next page of results from a paginated API response.
 
@@ -641,11 +705,24 @@ class NationBuilderV2:
         payload = {"data": {"id": id, "type": resource, "attributes": payload}}
         return self.client.patch_request(url, params=params, json=payload)
 
-    # * ####################################################################################### * #
+    # *
+    # * Genral Fetch Functions --------------------------------------------------------------------
 
-    # * Automation Enrollments
+    def fetch_resource(self, resource: str, **kwargs) -> Table:
+        if resource in self.resources:
+            return self.__getattribute__(f"fetch_{resource}")(**kwargs)
+        elif resource in self.__resources_not_implemented_functional:
+            return self._list_resource(resource=resource, **kwargs)
+        elif resource in self.__resources_not_implemented_nonfunctional:
+            raise NotImplementedError(
+                f"'{resource}' is a vaild resource, but is not currently accessible"
+            )
+        else:
+            raise ValueError(f"'{resource}' is not a vaild")
+    
 
-    # * ####################################################################################### * #
+    # *
+    # * Automation Enrollments --------------------------------------------------------------------
 
     def fetch_automation_enrollments(
         self,
@@ -691,11 +768,8 @@ class NationBuilderV2:
         """
         return self._delete_resource(resource="automation_enrollments", id=id, params=params)
 
-    # * ####################################################################################### * #
-
-    # * Automations
-
-    # * ####################################################################################### * #
+    # *
+    # * Automations -------------------------------------------------------------------------------
 
     def fetch_automations(
         self,
@@ -725,11 +799,8 @@ class NationBuilderV2:
         """
         return self._show_resource(resource="automations", id=id, params=params, **kwargs)
 
-    # * ####################################################################################### * #
-
-    # * Contacts
-
-    # * ####################################################################################### * #
+    # *
+    # * Contacts ----------------------------------------------------------------------------------
 
     def fetch_contacts(
         self,
@@ -787,11 +858,8 @@ class NationBuilderV2:
         """
         return self._patch_resource(resource="contacts", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Donation Tracking Codes
-
-    # * ####################################################################################### * #
+    # *
+    # * Donation Tracking Codes -------------------------------------------------------------------
 
     def fetch_donation_tracking_codes(
         self,
@@ -849,11 +917,8 @@ class NationBuilderV2:
             resource="donation_tracking_codes", id=id, params=params, payload=payload
         )
 
-    # * ####################################################################################### * #
-
-    # * Donations
-
-    # * ####################################################################################### * #
+    # *
+    # * Donations ---------------------------------------------------------------------------------
 
     def fetch_donations(
         self,
@@ -907,11 +972,8 @@ class NationBuilderV2:
         """
         return self._patch_resource(resource="donations", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Event RSVPs
-
-    # * ####################################################################################### * #
+    # *
+    # * Event RSVPs -------------------------------------------------------------------------------
 
     def fetch_event_rsvps(
         self,
@@ -950,11 +1012,8 @@ class NationBuilderV2:
     ):
         return self._patch_resource(resource="event_rsvps", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Events
-
-    # * ####################################################################################### * #
+    # *
+    # * Events ------------------------------------------------------------------------------------
 
     def fetch_events(
         self,
@@ -991,11 +1050,8 @@ class NationBuilderV2:
     def update_event(self, id: int | str, payload: dict | None = None, params: dict | None = None):
         return self._patch_resource(resource="events", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Lists
-
-    # * ####################################################################################### * #
+    # *
+    # * Lists -------------------------------------------------------------------------------------
 
     def fetch_lists(
         self,
@@ -1064,11 +1120,8 @@ class NationBuilderV2:
             **kwargs,
         )
 
-    # * ####################################################################################### * #
-
-    # * Membership Types
-
-    # * ####################################################################################### * #
+    # *
+    # * Membership Types --------------------------------------------------------------------------
 
     def fetch_membership_types(
         self,
@@ -1109,11 +1162,8 @@ class NationBuilderV2:
             resource="membership_types", id=id, params=params, payload=payload
         )
 
-    # * ####################################################################################### * #
-
-    # * Memberships
-
-    # * ####################################################################################### * #
+    # *
+    # * Memberships -------------------------------------------------------------------------------
 
     def fetch_memberships(
         self,
@@ -1149,11 +1199,8 @@ class NationBuilderV2:
     ):
         return self._patch_resource(resource="membership", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Event
-
-    # * ####################################################################################### * #
+    # *
+    # * Event -------------------------------------------------------------------------------------
 
     def fetch_pages(
         self,
@@ -1190,11 +1237,8 @@ class NationBuilderV2:
     def update_page(self, id: int | str, payload: dict | None = None, params: dict | None = None):
         return self._patch_resource(resource="pages", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Path Histories
-
-    # * ####################################################################################### * #
+    # *
+    # * Path Histories ----------------------------------------------------------------------------
 
     def fetch_path_histories(
         self,
@@ -1222,11 +1266,8 @@ class NationBuilderV2:
             resource="path_histories", id=id, params=params, sideload=sideload, **kwargs
         )
 
-    # * ####################################################################################### * #
-
-    # * Path Journey Status Changes
-
-    # * ####################################################################################### * #
+    # *
+    # * Path Journey Status Changes ---------------------------------------------------------------
 
     def fetch_path_journey_status_changes(
         self,
@@ -1273,11 +1314,8 @@ class NationBuilderV2:
             resource="path_journey_status_changes", id=id, params=params, payload=payload
         )
 
-    # * ####################################################################################### * #
-
-    # * Path Journeys
-
-    # * ####################################################################################### * #
+    # *
+    # * Path Journeys -----------------------------------------------------------------------------
 
     def fetch_path_journeys(
         self,
@@ -1341,11 +1379,8 @@ class NationBuilderV2:
         id = int(id)
         return self.client.patch_request(f"path_journeys/{id}/void", params=params)
 
-    # * ####################################################################################### * #
-
-    # * Path Steps
-
-    # * ####################################################################################### * #
+    # *
+    # * Path Steps --------------------------------------------------------------------------------
 
     def fetch_path_steps(
         self,
@@ -1383,11 +1418,8 @@ class NationBuilderV2:
     def update_path_step(self, id: int | str, payload: dict, params: dict | None = None):
         return self._patch_resource(resource="path_steps", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Paths
-
-    # * ####################################################################################### * #
+    # *
+    # * Paths -------------------------------------------------------------------------------------
 
     def fetch_paths(
         self,
@@ -1421,11 +1453,8 @@ class NationBuilderV2:
     def update_path(self, id: int | str, payload: dict, params: dict | None = None):
         return self._patch_resource(resource="paths", id=id, params=params, payload=payload)
 
-    # * ####################################################################################### * #
-
-    # * Signup Taggings
-
-    # * ####################################################################################### * #
+    # *
+    # * Signup Taggings ---------------------------------------------------------------------------
 
     def fetch_signup_taggings(
         self,
@@ -1482,11 +1511,8 @@ class NationBuilderV2:
     def delete_signup_tagging(self, id: int | str, params: dict | None = None):
         return self._delete_resource(resource="signup_taggings", id=id, params=params)
 
-    # * ####################################################################################### * #
-
-    # * Signup Tags
-
-    # * ####################################################################################### * #
+    # *
+    # * Signup Tags -------------------------------------------------------------------------------
 
     def fetch_signup_tags(
         self,
@@ -1514,11 +1540,8 @@ class NationBuilderV2:
             resource="signup_tags", id=id, params=params, sideload=sideload, **kwargs
         )
 
-    # * ####################################################################################### * #
-
-    # * Signups
-
-    # * ####################################################################################### * #
+    # *
+    # * Signups -----------------------------------------------------------------------------------
 
     def fetch_signups(
         self,
@@ -1567,9 +1590,7 @@ class NationBuilderV2:
     def upsert_signup(self, **kwargs):
         return self.push_signup(**kwargs)
 
-    def update_signup(
-        self, id: int | str, payload: dict | None = None, params: dict | None = None
-    ):
+    def update_signup(self, id: int | str, payload: dict | None = None, params: dict | None = None):
         return self._patch_resource(resource="signups", id=id, params=params, payload=payload)
 
     def show_signup(
