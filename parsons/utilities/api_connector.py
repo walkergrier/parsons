@@ -63,7 +63,7 @@ class APIConnector:
         # If `as_session` is `None`, check for env variable,
         # If `as_session` is `Truthy` or `Falsy` it overrides env variable
         if as_session is None:
-            self.as_session = check_env.check("PARSONS_AS_SESSION", as_session, True)
+            self.as_session: bool = bool(check_env.check("PARSONS_AS_SESSION", as_session, True))
         else:
             self.as_session: bool = as_session
 
