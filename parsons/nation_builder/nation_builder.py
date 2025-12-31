@@ -1,15 +1,15 @@
 import json
 import logging
 import time
+from collections.abc import Generator
 from typing import Any, cast
 from urllib.parse import ParseResult, parse_qs, urlparse
 
-from attr import field
 from requests import Response
 
-from parsons import Table  # pyright: ignore[reportMissingImports]
-from parsons.utilities import check_env  # pyright: ignore[reportMissingImports]
-from parsons.utilities.api_connector import APIConnector  # pyright: ignore[reportMissingImports]
+from parsons import Table
+from parsons.utilities import check_env
+from parsons.utilities.api_connector import APIConnector
 
 logger: logging.Logger = logging.getLogger(name=__name__)
 
@@ -227,72 +227,49 @@ class NationBuilderV2:
             headers=NationBuilderV2.get_auth_headers(access_token=access_token),
             data_key="data",
         )
-        self.resources: tuple[str] = (
-            # "async_processes",
-            "automation_enrollments",
-            "automations",
-            # "ballots",
-            # "broadcasters",
-            "contacts",
-            # "custom_fields",
-            "donation_tracking_codes",
-            "donations",
-            # "elections",
-            "event_rsvps",
-            # "event_ticket_levels",
-            "events",
-            # "imports",
-            "lists",
-            # "mailings",
-            "membership_types",
-            "memberships",
-            "pages",
-            "path_histories",
-            "path_journey_status_changes",
-            "path_journeys",
-            "path_steps",
-            "paths",
-            # "petition_signatures",
-            # "petitions",
-            # "pledges",
-            # "precincts",
-            # "relationships",
-            # "signup_profiles",
-            "signup_taggings",
-            "signup_tags",
-            "signups",
-            # "sites",
-            # "survey_question_possible_responses",
-            # "survey_question_responses",
-            # "survey_questions",
-            # "surveys",
-            # "voters",
-        )
-        self.__resources_not_implemented_functional: tuple[str] = (
-            "ballots",
-            "broadcasters",
-            "custom_fields",
-            "elections",
-            "event_ticket_levels",
-            "imports",
-            "mailings",
-            "petition_signatures",
-            "petitions",
-            "pledges",
-            "precincts",
-            "relationships",
-            "signup_profiles",
-            "sites",
-            "survey_question_possible_responses",
-            "survey_question_responses",
-            "survey_questions",
-            "surveys",
-            "voters",
-        )
-        self.__resources_not_implemented_nonfunctional: tuple[str] = (
-            "async_processes",
-        )
-        
+
+    resources: tuple[str] = (
+        "async_processes",
+        "automation_enrollments",
+        "automations",
+        "ballots",
+        "broadcasters",
+        "contacts",
+        "custom_fields",
+        "donation_tracking_codes",
+        "donations",
+        "elections",
+        "event_rsvps",
+        "event_ticket_levels",
+        "events",
+        "imports",
+        "lists",
+        "mailings",
+        "membership_types",
+        "memberships",
+        "pages",
+        "path_histories",
+        "path_journey_status_changes",
+        "path_journeys",
+        "path_steps",
+        "paths",
+        "petition_signatures",
+        "petitions",
+        "pledges",
+        "precincts",
+        "relationships",
+        "signup_profiles",
+        "signup_taggings",
+        "signup_tags",
+        "signups",
+        "sites",
+        "survey_question_possible_responses",
+        "survey_question_responses",
+        "survey_questions",
+        "surveys",
+        "voters",
+    )
+    __resources_not_implemented: tuple[str] = ("async_processes", "signup_profiles")
 
     @staticmethod
     def get_uri(slug: str) -> str:
@@ -326,10 +303,11 @@ class NationBuilderV2:
         Flattens the 'attributes' key into the main dictionary.
 
         Args:
-            data (list[dict]): A list of resource dictionaries from the API.
+            data:
+                A list of resource dictionaries from the API.
 
         Returns:
-            Table: A Table object containing the formatted data.
+            A Table object containing the formatted data.
         """
         result: list[dict] = [
             {"id": i["id"], "type": i["type"]} | i.get("attributes", {}) for i in data
@@ -347,11 +325,13 @@ class NationBuilderV2:
         Handles simple and nested structures.
 
         Args:
-            param_name (str): The base name for the parameter (e.g., 'filter').
-            param_dict (dict[str, Any]): The dictionary of parameters to format.
+            param_name:
+                The base name for the parameter (e.g., 'filter').
+            param_dict:
+                The dictionary of parameters to format.
 
         Returns:
-            list[tuple]: A list of (key, value) tuples formatted for the API request.
+            A list of (key, value) tuples formatted for the API request.
         """
 
         if param_name == "include":
@@ -385,10 +365,11 @@ class NationBuilderV2:
         Parses a URL string to separate the path from the query parameters.
 
         Args:
-            url (str): The full or partial URL to parse.
+            url:
+                The full or partial URL to parse.
 
         Returns:
-            tuple[str, list[tuple] | dict]: A tuple containing the URL path and the parsed parameters.
+            A tuple containing the URL path and the parsed parameters.
         """
         url = url[len("/api/v2/") :] if url.startswith("/api/v2/") else url
         parsed_url: ParseResult = urlparse(url=url)
@@ -402,10 +383,11 @@ class NationBuilderV2:
         Fetches the next page of results from a paginated API response.
 
         Args:
-            resp (dict): The current API response dictionary which may contain a 'next' link.
+            resp:
+                The current API response dictionary which may contain a 'next' link.
 
         Returns:
-            dict | None: The API response for the next page, or None if there is no next page.
+            The API response for the next page, or None if there is no next page.
         """
         if isinstance(resp, Response):
             resp_dict: dict = resp.json()
@@ -422,11 +404,13 @@ class NationBuilderV2:
         Fetches all pages of results from a paginated API response, up to a specified limit.
 
         Args:
-            resp (dict): The initial API response.
-            limit (int): The maximum number of records to retrieve. If 0, all records are fetched.
+            resp:
+                The initial API response.
+            limit:
+                The maximum number of records to retrieve. If 0, all records are fetched.
 
         Returns:
-            Table: A Table object containing all the aggregated data.
+            A Table object containing all the aggregated data.
         """
         data: list[dict] = resp["data"]
         while limit <= 0 or len(data) < limit:
@@ -436,6 +420,28 @@ class NationBuilderV2:
             resp = self.client.get_request(url, params=params)
             data.extend(resp["data"])
         return self._to_table(data=data)
+
+    def _fetch_all_generator(self, resp: dict, limit: int = 0) -> Generator[Any, None, None]:
+        """
+        A generator that yields Table objects page by page.
+        """
+        yield self._to_table(data=resp["data"])
+        count = len(resp["data"])
+
+        while limit <= 0 or count < limit:
+            url, params = self.fetch_next(resp=resp)
+            if url is None:
+                break
+
+            resp = self.client.get_request(url, params=params)
+
+            if not resp.get("data"):
+                break
+
+            page_table = self._to_table(data=resp["data"])
+            yield page_table
+
+            count += len(resp["data"])
 
     # * ####################################################################################### * #
 
@@ -474,30 +480,39 @@ class NationBuilderV2:
         extra_fields: list | str | None = None,
         include: list | str | None = None,
         params: dict | list[tuple] | None = None,
-        all_results: bool = False,
+        all_results: bool | str = False,
         url: str = "",
         page_size: int = 100,
         limit: int = 0,
         raw_resp: bool = False,
         debug_params: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator:
         """
         Lists records for a given resource, with options for filtering and pagination.
 
         Args:
-            resource (str): The name of the resource to list (e.g., 'people', 'lists').
-            filters (dict | None): A dictionary of filters to apply to the query.
-            params (dict | list[tuple] | None): Additional query parameters.
-            all_results (bool): If True, fetches all pages of results.
-            url (str): A specific URL to use instead of the resource name.
-            page_size (int): The number of results to return per page (max 100).
-            limit (int): The maximum number of results to return when all_results is True.
-            raw_resp (bool): If True, returns the raw API response dictionary.
-            count (bool): If True, requests the total count of matching records.
+            resource:
+                The name of the resource to list (e.g., 'people', 'lists').
+            filters:
+                A dictionary of filters to apply to the query.
+            params:
+                Additional query parameters.
+            all_results:
+                If True, fetches all pages of results.
+            url:
+                A specific URL to use instead of the resource name.
+            page_size:
+                The number of results to return per page (max 100).
+            limit:
+                The maximum number of results to return when all_results is True.
+            raw_resp:
+                If True, returns the raw API response dictionary.
+            count:
+                If True, requests the total count of matching records.
 
         Returns:
-            Table | dict: A Table of results, or a raw dictionary if raw_resp is True.
+            A Table of results, or a raw dictionary if raw_resp is True.
         """
         url = url if url else resource
 
@@ -529,8 +544,14 @@ class NationBuilderV2:
             return self.client.request(url, req_type="GET", params=params)
 
         resp: dict = self.client.get_request(url, params=params)
-        if all_results:
+
+        if all_results is True:
             return self._fetch_all(resp=resp, limit=limit)
+        elif isinstance(all_results, str) and all_results.lower() in ("gen", "generator"):
+            return self._fetch_all_generator(resp=resp, limit=limit)
+        if all_results not in (False, True, "gen", "generator"):
+            logger.warning("all_results should be type bool or 'generator'")
+
         return self._to_table(data=resp["data"])
 
     def _show_resource(
@@ -549,15 +570,20 @@ class NationBuilderV2:
         Retrieves a single resource record by its ID.
 
         Args:
-            resource (str): The name of the resource.
-            id (int | str): The unique ID of the record.
-            params (dict | None): Additional query parameters.
-            url (str): A specific URL to use instead of the resource name and ID.
-            sideload (list[str] | str | bool): Sideload related resources.
-                                                True for all, or a list of specific relations.
+            resource:
+                The name of the resource.
+            id:
+                The unique ID of the record.
+            params:
+                Additional query parameters.
+            url:
+                A specific URL to use instead of the resource name and ID.
+            sideload:
+                Sideload related resources.
+                True for all, or a list of specific relations.
 
         Returns:
-            dict: A dictionary representing the resource.
+            A dictionary representing the resource.
         """
         id = int(id)
         url = url if url else f"{resource}/{id}"
@@ -579,11 +605,10 @@ class NationBuilderV2:
                 )
 
         resp: dict = self.client.get_request(url, params=params)["data"]
-        resp |= resp.pop("attributes")
-        relationships = resp.pop("relationships")
-        resp["relationships"] = relationships  # I want the relationships at the end of the dict
+        resp |= resp.pop("attributes", {})
+        resp["relationships"] = resp.pop("relationships", {})
 
-        if sideload is False:
+        if not sideload:
             return resp
 
         sideload = [sideload] if isinstance(sideload, str) else sideload
@@ -598,16 +623,18 @@ class NationBuilderV2:
         resp["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
         return resp
 
-    def _sideload_resource(self, resp: dict, resource: str) -> Table:
+    def _sideload_resource(self, resp: dict, resource: str) -> Table | None:
         """
         Fetches and sideloads a related resource from a relationship link.
 
         Args:
-            resp (dict): The primary resource's response dictionary.
-            resource (str): The name of the relationship to sideload.
+            resp:
+                The primary resource's response dictionary.
+            resource:
+                The name of the relationship to sideload.
 
         Returns:
-            Table | None: A Table of the related resources, or None if the link is not present.
+            A Table of the related resources, or None if the link is not present.
         """
         link: str | None = resp["relationships"][resource]["links"]["related"]
         if not link:
@@ -626,13 +653,17 @@ class NationBuilderV2:
         Creates a new resource record.
 
         Args:
-            resource (str): The name of the resource to create.
-            payload (dict): The attributes for the new record.
-            params (dict | None): Additional query parameters.
-            url (str): A specific URL to use for the POST request.
+            resource:
+                The name of the resource to create.
+            payload:
+                The attributes for the new record.
+            params:
+                Additional query parameters.
+            url:
+                A specific URL to use for the POST request.
 
         Returns:
-            dict: The API response for the creation request.
+            The API response for the creation request.
         """
         url = url if url else resource
         if not isinstance(payload, dict):
@@ -645,10 +676,14 @@ class NationBuilderV2:
         Deletes a resource record by its ID.
 
         Args:
-            resource (str): The name of the resource.
-            id (int | str): The ID of the record to delete.
-            params (dict | None): Additional query parameters.
-            url (str): A specific URL to use for the DELETE request.
+            resource:
+                The name of the resource.
+            id:
+                The ID of the record to delete.
+            params:
+                Additional query parameters.
+            url:
+                A specific URL to use for the DELETE request.
 
         Returns:
             dict: The API response.
@@ -664,13 +699,17 @@ class NationBuilderV2:
         Creates or updates a resource record using the '/push' endpoint.
 
         Args:
-            resource (str): The name of the resource.
-            payload (dict): The attributes for the record to upsert.
-            params (dict | list[tuple] | None): Additional query parameters.
-            url (str): A specific URL to use for the request.
+            resource:
+                The name of the resource.
+            payload:
+                The attributes for the record to upsert.
+            params:
+                Additional query parameters.
+            url:
+                A specific URL to use for the request.
 
         Returns:
-            dict: The API response.
+            The API response.
         """
         url = url if url else f"{resource}/push"
         params = params if params else {}
@@ -691,14 +730,19 @@ class NationBuilderV2:
         Updates an existing resource record.
 
         Args:
-            resource (str): The name of the resource.
-            id (int | str): The ID of the record to update.
-            payload (dict): The attributes to update on the record.
-            params (dict | list[tuple] | None): Additional query parameters.
-            url (str): A specific URL to use for the PATCH request.
+            resource:
+                The name of the resource.
+            id:
+                The ID of the record to update.
+            payload:
+                The attributes to update on the record.
+            params:
+                Additional query parameters.
+            url:
+                A specific URL to use for the PATCH request.
 
         Returns:
-            dict: The API response.
+            The API response.
         """
         id = int(id)
         url = url if url else f"{resource}/{id}"
@@ -708,20 +752,18 @@ class NationBuilderV2:
         return self.client.patch_request(url, params=params, json=payload)
 
     # *
-    # * Genral Fetch Functions --------------------------------------------------------------------
+    # * Genral Fetch Function ---------------------------------------------------------------------
 
     def fetch_resource(self, resource: str, **kwargs) -> Table:
-        if resource in self.resources:
+        if resource not in self.resources:
+            raise ValueError(f"'{resource}' is not a vaild resource")
+        if hasattr(self, f"fetch_{resource}"):
             return self.__getattribute__(f"fetch_{resource}")(**kwargs)
-        elif resource in self.__resources_not_implemented_functional:
-            return self._list_resource(resource=resource, **kwargs)
-        elif resource in self.__resources_not_implemented_nonfunctional:
+        if resource in self.__resources_not_implemented:
             raise NotImplementedError(
                 f"'{resource}' is a vaild resource, but is not currently accessible"
             )
-        else:
-            raise ValueError(f"'{resource}' is not a vaild")
-    
+        return self._list_resource(resource=resource, **kwargs)
 
     # *
     # * Automation Enrollments --------------------------------------------------------------------
