@@ -228,7 +228,7 @@ class NationBuilderV2:
             data_key="data",
         )
 
-    resources: tuple[str] = (
+    resources: tuple[str, ...] = (
         "async_processes",
         "automation_enrollments",
         "automations",
@@ -269,7 +269,7 @@ class NationBuilderV2:
         "surveys",
         "voters",
     )
-    __resources_not_implemented: tuple[str] = ("async_processes", "signup_profiles")
+    __resources_not_implemented: tuple[str, ...] = ("async_processes", "signup_profiles")
 
     @staticmethod
     def get_uri(slug: str) -> str:
