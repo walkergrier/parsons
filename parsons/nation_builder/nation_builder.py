@@ -469,7 +469,7 @@ class NationBuilderV2:
                 ("page[size]", 1),
             ]
         )
-        resp = self.client.get_request(url, params=params_list)
+        resp: dict = self.client.get_request(url, params=params_list)
         return resp["meta"]["stats"]["total"]["count"]
 
     def _list_resource(
