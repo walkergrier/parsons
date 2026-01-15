@@ -316,7 +316,7 @@ class NationBuilderV2:
 
     @staticmethod
     def _param_builder(
-        values: dict[str, Any] | Any,
+        values: dict | str | list,
         param_name: str,
         resource: str,
     ) -> list[tuple]:
@@ -334,8 +334,21 @@ class NationBuilderV2:
             A list of (key, value) tuples formatted for the API request.
         """
 
+        def fmt_list() -> str:
+            if isinstance(values, (list, set, tuple)):
+                formatted: str = ",".join(map(str, values))
+            else:
+                formatted: str = str(values)
+            return f"{formatted}"
+
         if param_name == "include":
-            return [(param_name, ",".join(values) if isinstance(values, list) else values)]
+            return [(param_name, fmt_list())]
+
+        # if param_name in ("fields", "extra_fields"):
+        #     if isinstance(values, str):
+        #         final_values: str = f"[{values}]"
+        #     if isinstance(values, (list,tuple,set)):
+        #         final_values = f"[{}]"
 
         if param_name == "filter":
             params: list = []
@@ -352,12 +365,7 @@ class NationBuilderV2:
             return params
 
         else:
-            return [
-                (
-                    f"{param_name}[{resource}]",
-                    [",".join(map(str, values)) if isinstance(values, list) else values],
-                )
-            ]
+            return [(f"{param_name}[{resource}]", fmt_list())]
 
     @staticmethod
     def _urlparse(url: str) -> tuple[str, list[tuple]]:
