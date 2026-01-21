@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from collections.abc import Generator
-from typing import Any, cast
+from typing import Any, Literal, overload
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from requests import Response
@@ -151,7 +151,7 @@ class NationBuilderV1:
 
         url: str = f"people/{person_id}"
         response = self.client.put_request(url, data=json.dumps({"person": person}))
-        response = cast("dict[str, Any]", response)
+        response = response
 
         return response
 
@@ -480,6 +480,16 @@ class NationBuilderV2:
         resp: dict = self.client.get_request(url, params=params_list)
         return resp["meta"]["stats"]["total"]["count"]
 
+    @overload
+    def _list_resource(
+        self, resource: str, *args: Any, all_results: Literal["gen"] = "gen", **kwargs: Any
+    ) -> Generator: ...
+
+    @overload
+    def _list_resource(
+        self, resource: str, *args: Any, all_results: bool = False, **kwargs: Any
+    ) -> Table: ...
+
     def _list_resource(
         self,
         resource: str,
@@ -656,6 +666,7 @@ class NationBuilderV2:
         params: dict | None,
         payload: dict,
         url: str = "",
+        sideposting = False,
     ):
         """
         Creates a new resource record.
@@ -783,7 +794,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         """
         Lists all automation enrollments
         """
@@ -831,7 +842,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         """
         Lists all automations
         """
@@ -919,7 +930,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         """
         Lists all donation tracking codes
         """
@@ -978,7 +989,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         """
         Lists all donations
         """
@@ -1033,7 +1044,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="event_rsvps",
             filters=filters,
@@ -1073,7 +1084,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="events",
             filters=filters,
@@ -1083,6 +1094,88 @@ class NationBuilderV2:
         )
 
     def post_event(self, payload: dict, params: dict | None = None):
+        payload = {
+            "data": {
+                "type": "events",
+                "attributes": {
+                    "accept_rsvps": false,
+                    "additional_rsvps_count": 20,
+                    "allow_guests": false,
+                    "attending_count": 100,
+                    "auto_response_broadcaster_id": "1",
+                    "auto_response_content": "Content of autoresponse",
+                    "auto_response_subject": "Subject of autoresponse",
+                    "capacity_count": 200,
+                    "contact_email": "jdoe@work.com",
+                    "contact_email_private": false,
+                    "contact_name": "John Doe",
+                    "contact_phone_number": "5555555555",
+                    "contact_phone_private": false,
+                    "content": "Event description",
+                    "donation_tracking_code_id": "1",
+                    "duration": 3600,
+                    "event_form_address": "required",
+                    "event_form_phone": "required",
+                    "gather_volunteers": false,
+                    "point_person_id": "1",
+                    "private": false,
+                    "sends_auto_response": false,
+                    "show_guests": false,
+                    "start_at": "2019-10-26T10:00:00-04:00",
+                    "time_zone": "Eastern Time (US & Canada)",
+                    "user_ticket_currency": "USD",
+                    "user_ticket_price_in_cents": 400,
+                    "user_ticket_purchase_url": "https://www.example.com",
+                    "uses_shifts": false,
+                    "uses_tickets": false,
+                    "venue_name": "Event Center",
+                    "venue_address_attributes": {
+                        "address1": "20 W 34th St.",
+                        "address2": "Suite 100",
+                        "address3": null,
+                        "city": "New York",
+                        "state": "NY",
+                        "zip": "10001",
+                        "county": "New York County",
+                        "country_code": "US",
+                        "lat": "40.7484",
+                        "lng": "73.9857",
+                        "fips": "04",
+                        "submitted_address": "20 W 34th St. Suite 100, New York, NY 10001",
+                        "distance": 0,
+                        "import_id": "2",
+                        "work_phone": "5555555555",
+                        "phone_number": "5555555555",
+                        "phone_country_code": "1",
+                        "work_phone_number": "5555555555",
+                        "delete": true,
+                    },
+                },
+                "relationships": {
+                    "page": {"data": {"type": "pages", "temp-id": "new-id", "method": "create"}}
+                },
+            },
+            "included": [
+                {
+                    "type": "pages",
+                    "temp-id": "new-id",
+                    "attributes": {
+                        "site_id": "1",
+                        "parent_id": "1",
+                        "author_id": "1",
+                        "external_id": "abc",
+                        "slug": "your-slug",
+                        "status": "unlisted",
+                        "name": "Page Name",
+                        "headline": "Page headline",
+                        "title": "Page Title",
+                        "excerpt": "Page excerpt...",
+                        "page_type_name": "Basic",
+                        "permission_level": "anyone",
+                    },
+                }
+            ],
+        }
         return self._post_resource(resource="events", params=params, payload=payload)
 
     def show_event(
@@ -1111,7 +1204,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="lists", filters=filters, params=params, all_results=all_results, **kwargs
         )
@@ -1181,7 +1274,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="membership_types",
             filters=filters,
@@ -1223,7 +1316,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="memberships",
             filters=filters,
@@ -1260,7 +1353,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="pages",
             filters=filters,
@@ -1298,7 +1391,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="path_histories",
             filters=filters,
@@ -1327,7 +1420,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="path_journey_status_changes",
             filters=filters,
@@ -1375,7 +1468,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="path_journeys",
             filters=filters,
@@ -1440,7 +1533,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="path_steps",
             filters=filters,
@@ -1479,7 +1572,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="paths", filters=filters, params=params, all_results=all_results, **kwargs
         )
@@ -1514,7 +1607,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="signup_taggings",
             filters=filters,
@@ -1572,7 +1665,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="signup_tags",
             filters=filters,
@@ -1601,7 +1694,7 @@ class NationBuilderV2:
         params: dict | None = None,
         all_results: bool = False,
         **kwargs,
-    ) -> Table:
+    ) -> Table | Generator[Table, None, None]:
         return self._list_resource(
             resource="signups",
             filters=filters,
