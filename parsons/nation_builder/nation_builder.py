@@ -314,6 +314,7 @@ class NationBuilderV2:
         ]
         return Table(result)
 
+    # TODO: implment this
     @staticmethod
     def fmt_list(values) -> str:
         if isinstance(values, (str, int)):
