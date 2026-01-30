@@ -1,7 +1,7 @@
 import json
 import logging
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from typing import Any, Literal, overload
 from urllib.parse import ParseResult, parse_qs, urlparse
 
@@ -317,12 +317,10 @@ class NationBuilderV2:
     # TODO: implment this
     @staticmethod
     def fmt_list(values) -> str:
-        if isinstance(values, (str, int)):
-            formatted: str = str(values)
-        else:
-            formatted: str = ",".join(map(str, values))
+        if isinstance(values, (str, int)) or not isinstance(values, Iterable):
+            return str(values)
+        return ",".join(map(str, values))
 
-        return f"{formatted}"
 
     @staticmethod
     def _param_builder(
@@ -344,15 +342,8 @@ class NationBuilderV2:
             A list of (key, value) tuples formatted for the API request.
         """
 
-        def fmt_list() -> str:
-            if isinstance(values, (list, set, tuple)):
-                formatted: str = ",".join(map(str, values))
-            else:
-                formatted: str = str(values)
-            return f"{formatted}"
-
         if param_name == "include":
-            return [(param_name, fmt_list())]
+            return [(param_name, NationBuilderV2.fmt_list(values))]
 
         # if param_name in ("fields", "extra_fields"):
         #     if isinstance(values, str):
@@ -375,7 +366,7 @@ class NationBuilderV2:
             return params
 
         else:
-            return [(f"{param_name}[{resource}]", fmt_list())]
+            return [(f"{param_name}[{resource}]", NationBuilderV2.fmt_list(values))]
 
     @staticmethod
     def _urlparse(url: str) -> tuple[str, list[tuple]]:
@@ -1237,7 +1228,7 @@ class NationBuilderV2:
         params: dict | None = None,
         **kwargs,
     ):
-        signup_ids = signup_ids if not isinstance(signup_ids, list) else ",".join(signup_ids)
+        signup_ids = signup_ids if isinstance(signup_ids, list) else [signup_ids]
         payload: dict[str, dict] = {
             "data": {"id": list_id, "type": "lists", "signup_ids": signup_ids}
         }
@@ -1264,16 +1255,16 @@ class NationBuilderV2:
             json=payload,
         )
 
-    def fetch_signups_on_list(
-        self, id: int | str, params: dict | None = None, all_results: bool = True, **kwargs
-    ) -> Table:
-        return self._list_resource(
-            resource="lists",
-            params=params,
-            all_results=all_results,
-            url=f"lists/{id}/signups",
-            **kwargs,
-        )
+    # def fetch_signups_on_list(
+    #     self, id: int | str, params: dict | None = None, all_results: bool = True, **kwargs
+    # ) -> Table:
+    #     return self._list_resource(
+    #         resource="lists",
+    #         params=params,
+    #         all_results=all_results,
+    #         url=f"lists/{id}/signups",
+    #         **kwargs,
+    #     )
 
     # *
     # * Membership Types --------------------------------------------------------------------------
