@@ -75,7 +75,7 @@ class APIConnector:
             retries = Retry(
                 total=3, backoff_factor=1, allowed_methods={"HEAD", "GET", "PUT", "DELETE", "PATCH"}
             )
-            adapter = HTTPAdapter(max_retries=retries)
+            adapter = HTTPAdapter(max_retries=retries, pool_connections=30, pool_maxsize=30)
 
             self.session = Session()
             self.session.mount(prefix="https://", adapter=adapter)

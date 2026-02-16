@@ -2,7 +2,7 @@ import json
 import logging
 import time
 from collections.abc import Generator, Iterable
-from typing import Any, Literal, overload
+from typing import Any, Literal, NewType, overload, get_args
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 from requests import Response
@@ -220,6 +220,48 @@ class NationBuilderV1:
         return (False, None)
 
 
+NationBuilderResource = Literal[
+    "async_processes",
+    "automation_enrollments",
+    "automations",
+    "ballots",
+    "broadcasters",
+    "contacts",
+    "custom_fields",
+    "donation_tracking_codes",
+    "donations",
+    "elections",
+    "event_rsvps",
+    "event_ticket_levels",
+    "events",
+    "imports",
+    "lists",
+    "mailings",
+    "membership_types",
+    "memberships",
+    "pages",
+    "path_histories",
+    "path_journey_status_changes",
+    "path_journeys",
+    "path_steps",
+    "paths",
+    "petition_signatures",
+    "petitions",
+    "pledges",
+    "precincts",
+    "relationships",
+    "signup_profiles",
+    "signup_taggings",
+    "signup_tags",
+    "signups",
+    "sites",
+    "survey_question_possible_responses",
+    "survey_question_responses",
+    "survey_questions",
+    "surveys",
+    "voters",
+]
+
 class NationBuilderV2:
     def __init__(self, slug: str, access_token: str) -> None:
         self.client: APIConnector = APIConnector(
@@ -228,47 +270,6 @@ class NationBuilderV2:
             data_key="data",
         )
 
-    resources: tuple[str, ...] = (
-        "async_processes",
-        "automation_enrollments",
-        "automations",
-        "ballots",
-        "broadcasters",
-        "contacts",
-        "custom_fields",
-        "donation_tracking_codes",
-        "donations",
-        "elections",
-        "event_rsvps",
-        "event_ticket_levels",
-        "events",
-        "imports",
-        "lists",
-        "mailings",
-        "membership_types",
-        "memberships",
-        "pages",
-        "path_histories",
-        "path_journey_status_changes",
-        "path_journeys",
-        "path_steps",
-        "paths",
-        "petition_signatures",
-        "petitions",
-        "pledges",
-        "precincts",
-        "relationships",
-        "signup_profiles",
-        "signup_taggings",
-        "signup_tags",
-        "signups",
-        "sites",
-        "survey_question_possible_responses",
-        "survey_question_responses",
-        "survey_questions",
-        "surveys",
-        "voters",
-    )
     __resources_not_implemented: tuple[str, ...] = ("async_processes", "signup_profiles")
 
     @staticmethod
@@ -321,12 +322,11 @@ class NationBuilderV2:
             return str(values)
         return ",".join(map(str, values))
 
-
     @staticmethod
     def _param_builder(
         values: dict | str | list,
         param_name: str,
-        resource: str,
+        resource: NationBuilderResource,
     ) -> list[tuple]:
         """
         Converts a parameter dictionary into NationBuilder's specific param format.
@@ -458,42 +458,23 @@ class NationBuilderV2:
 
     # * ####################################################################################### * #
 
-    def count_resource(
-        self,
-        resource: str,
-        filters: dict | None = None,
-        url: str = "",
-        params: dict | None = None,
-    ) -> int:
-        url = url if url else resource
-        params_list: list[tuple] = list(params.items()) if params else []
-        if filters:
-            params_list.extend(
-                self._param_builder(values=filters, param_name="filter", resource=resource)
-            )
-        params_list.extend(
-            [
-                (f"fields{resource}", "id"),
-                ("stats[total]", "count"),
-                ("page[size]", 1),
-            ]
-        )
-        resp: dict = self.client.get_request(url, params=params_list)
-        return resp["meta"]["stats"]["total"]["count"]
-
     @overload
     def _list_resource(
-        self, resource: str, *args: Any, all_results: Literal["gen"] = "gen", **kwargs: Any
+        self,
+        resource: NationBuilderResource,
+        *args: Any,
+        all_results: Literal["gen"] = "gen",
+        **kwargs: Any,
     ) -> Generator: ...
 
     @overload
     def _list_resource(
-        self, resource: str, *args: Any, all_results: bool = False, **kwargs: Any
+        self, resource: NationBuilderResource, *args: Any, all_results: bool = False, **kwargs: Any
     ) -> Table: ...
 
     def _list_resource(
         self,
-        resource: str,
+        resource: NationBuilderResource,
         filters: dict | None = None,
         fields: list | str | None = None,
         extra_fields: list | str | None = None,
@@ -575,7 +556,7 @@ class NationBuilderV2:
 
     def _show_resource(
         self,
-        resource: str,
+        resource: NationBuilderResource,
         id: int | str,
         fields: list | str | None = None,
         extra_fields: list | str | None = None,
@@ -642,7 +623,7 @@ class NationBuilderV2:
         resp["relationships"] = {k: v for k, v in sideloaded_resources.items() if v}
         return resp
 
-    def _sideload_resource(self, resp: dict, resource: str) -> Table | None:
+    def _sideload_resource(self, resp: dict, resource: NationBuilderResource) -> Table | None:
         """
         Fetches and sideloads a related resource from a relationship link.
 
@@ -663,11 +644,11 @@ class NationBuilderV2:
 
     def _post_resource(
         self,
-        resource: str,
+        resource: NationBuilderResource,
         params: dict | None,
         payload: dict,
         url: str = "",
-        sideposting = False,
+        sideposting=False,
     ):
         """
         Creates a new resource record.
@@ -713,7 +694,7 @@ class NationBuilderV2:
         return self.client.delete_request(url, params=params)
 
     def _upsert_resource(
-        self, resource: str, payload: dict, params: dict | list[tuple] | None = None, url: str = ""
+        self, resource: NationBuilderResource, payload: dict, params: dict | list[tuple] | None = None, url: str = ""
     ):
         """
         Creates or updates a resource record using the '/push' endpoint.
@@ -740,7 +721,7 @@ class NationBuilderV2:
 
     def _patch_resource(
         self,
-        resource: str,
+        resource: NationBuilderResource,
         id: int | str,
         params: dict | list[tuple] | None,
         payload: dict | None,
@@ -774,8 +755,31 @@ class NationBuilderV2:
     # *
     # * Genral Fetch Function ---------------------------------------------------------------------
 
-    def fetch_resource(self, resource: str, **kwargs) -> Table:
-        if resource not in self.resources:
+    def count_resource(
+        self,
+        resource: NationBuilderResource,
+        filters: dict | None = None,
+        url: str = "",
+        params: dict | None = None,
+    ) -> int:
+        url = url if url else resource
+        params_list: list[tuple] = list(params.items()) if params else []
+        if filters:
+            params_list.extend(
+                self._param_builder(values=filters, param_name="filter", resource=resource)
+            )
+        params_list.extend(
+            [
+                (f"fields{resource}", "id"),
+                ("stats[total]", "count"),
+                ("page[size]", 1),
+            ]
+        )
+        resp: dict = self.client.get_request(url, params=params_list)
+        return resp["meta"]["stats"]["total"]["count"]
+
+    def fetch_resource(self, resource: NationBuilderResource, **kwargs) -> Table:
+        if resource not in get_args(NationBuilderResource):
             raise ValueError(f"'{resource}' is not a vaild resource")
         if hasattr(self, f"fetch_{resource}"):
             return self.__getattribute__(f"fetch_{resource}")(**kwargs)
