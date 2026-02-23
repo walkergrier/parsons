@@ -647,6 +647,7 @@ class NationBuilderV2:
         resource: NationBuilderResource,
         params: dict | None,
         payload: dict,
+        payload_override: dict | None = None,
         url: str = "",
         sideposting=False,
     ):
@@ -669,7 +670,7 @@ class NationBuilderV2:
         url = url if url else resource
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
-        payload = {"data": {"type": resource, "attributes": payload}}
+        payload = payload_override or {"data": {"type": resource, "attributes": payload}}
         return self.client.post_request(url, params=params, json=payload)
 
     def _delete_resource(self, resource, id: int | str, params: dict | None = None, url: str = ""):
