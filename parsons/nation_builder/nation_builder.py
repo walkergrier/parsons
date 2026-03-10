@@ -1264,7 +1264,7 @@ class NationBuilderV2:
     #     self, id: int | str, params: dict | None = None, all_results: bool = True, **kwargs
     # ) -> Table:
     #     return self._list_resource(
-    #         resource="lists",
+    #         resource="signups",
     #         params=params,
     #         all_results=all_results,
     #         url=f"lists/{id}/signups",
