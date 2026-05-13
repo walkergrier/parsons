@@ -270,7 +270,7 @@ class NationBuilderV2:
             data_key="data",
         )
 
-    __resources_not_implemented: tuple[str, ...] = ("async_processes", "signup_profiles")
+    __resources_not_implemented: tuple[str, ...] = ("async_processes")
 
     @staticmethod
     def get_uri(slug: str) -> str:
@@ -1225,6 +1225,9 @@ class NationBuilderV2:
         return self._show_resource(
             resource="lists", id=id, params=params, sideload=sideload, **kwargs
         )
+        
+    def post_list(self, payload: dict, params: dict | None = None):
+        return self._post_resource(resource="lists", params=None, payload=payload)
 
     def add_signups_to_list(
         self,
@@ -1331,6 +1334,9 @@ class NationBuilderV2:
             **kwargs,
         )
 
+    def post_membership(self, payload: dict, params: dict | None = None):
+        return self._post_resource(resource="memberships", params=params, payload=payload)
+
     def show_membership(
         self,
         id: int | str,
@@ -1343,12 +1349,12 @@ class NationBuilderV2:
         )
 
     def delete_membership(self, id: int | str, params: dict | None = None):
-        return self._delete_resource(resource="membership", id=id, params=params)
+        return self._delete_resource(resource="memberships", id=id, params=params)
 
     def update_membership(
         self, id: int | str, payload: dict | None = None, params: dict | None = None
     ):
-        return self._patch_resource(resource="membership", id=id, params=params, payload=payload)
+        return self._patch_resource(resource="memberships", id=id, params=params, payload=payload)
 
     # *
     # * Event -------------------------------------------------------------------------------------
