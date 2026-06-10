@@ -673,7 +673,7 @@ class NationBuilderV2:
         payload = payload_override or {"data": {"type": resource, "attributes": payload}}
         return self.client.post_request(url, params=params, json=payload)
 
-    def _delete_resource(self, resource, id: int | str, params: dict | None = None, url: str = ""):
+    def _delete_resource(self, resource: NationBuilderResource, id: int | str, params: dict | None = None, url: str = ""):
         """
         Deletes a resource record by its ID.
 
