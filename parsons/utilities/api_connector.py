@@ -54,7 +54,7 @@ class APIConnector:
         pagination_key: str | None = None,
         data_key: str | None = None,
         as_session: bool | None = None,
-        default_timeout: int | None = 10,
+        default_timeout: int | None = 20,
     ) -> None:
         # Add a trailing slash if its missing
         if not uri.endswith("/"):
