@@ -30,7 +30,7 @@ class SignupsNB:
             **kwargs,
         )
 
-    def post_signup(self, payload: dict, params: dict) -> dict:
+    def post_signup(self, payload: dict, params: dict | None = None) -> dict:
         return self._post_resource(resource="signups", params=params, payload=payload)
 
     def push_signup(self, payload: dict, params: dict | None = None) -> dict:

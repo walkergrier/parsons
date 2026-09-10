@@ -30,6 +30,7 @@ class NationBuilderV2(
             headers=NationBuilderV2.get_auth_headers(access_token=access_token),
             data_key="data",
         )
+        self.TEST_VAL = "TTT"
 
     __resources_not_implemented: set[str] = NOT_IMPLEMENTED
 
@@ -326,6 +327,7 @@ class NationBuilderV2(
         url: str = "",
         sideload: list[str] | str | bool = False,
         sideload_params: dict | None = None,
+        raw_resp: bool = False,
     ) -> dict:
         """
         Retrieves a single resource record by its ID.
@@ -410,6 +412,7 @@ class NationBuilderV2(
         payload: dict,
         payload_override: dict | None = None,
         url: str = "",
+        raw_resp: bool = False,
         sideposting=False,
     ):
         """
@@ -432,9 +435,9 @@ class NationBuilderV2(
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = payload_override or {"data": {"type": resource, "attributes": payload}}
-        return self.client.post_request(url, params=params, json=payload)
+        return self.client.post_request(url, params=params, json=payload, raw_resp=raw_resp)
 
-    def _delete_resource(self, resource: NationBuilderResource, id: int | str, params: dict | None = None, url: str = ""):
+    def _delete_resource(self, resource: NationBuilderResource, id: int | str, params: dict | None = None, url: str = "", raw_resp: bool=False,):
         """
         Deletes a resource record by its ID.
 
@@ -453,10 +456,10 @@ class NationBuilderV2(
         """
         id = int(id)
         url = url if url else f"{resource}/{id}"
-        return self.client.delete_request(url, params=params)
+        return self.client.delete_request(url, params=params, raw_resp=raw_resp)
 
     def _upsert_resource(
-        self, resource: NationBuilderResource, payload: dict, params: dict | list[tuple] | None = None, url: str = ""
+        self, resource: NationBuilderResource, payload: dict, params: dict | list[tuple] | None = None, url: str = "",raw_resp: bool = False,
     ):
         """
         Creates or updates a resource record using the '/push' endpoint.
@@ -479,7 +482,7 @@ class NationBuilderV2(
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = {"data": {"type": resource, "attributes": payload}}
-        return self.client.patch_request(url, params=params, json=payload)
+        return self.client.patch_request(url, params=params, json=payload, raw_resp=raw_resp)
 
     def _patch_resource(
         self,
@@ -488,6 +491,7 @@ class NationBuilderV2(
         params: dict | list[tuple] | None,
         payload: dict | None,
         url: str = "",
+        raw_resp: bool = False,
     ):
         """
         Updates an existing resource record.
@@ -512,7 +516,7 @@ class NationBuilderV2(
         if not isinstance(payload, dict):
             raise ValueError("payload must be dict")
         payload = {"data": {"id": id, "type": resource, "attributes": payload}}
-        return self.client.patch_request(url, params=params, json=payload)
+        return self.client.patch_request(url, params=params, json=payload, raw_resp=raw_resp)
 
     # *
     # * Genral Fetch Function ---------------------------------------------------------------------
@@ -541,7 +545,7 @@ class NationBuilderV2(
         return resp["meta"]["stats"]["total"]["count"]
 
     def fetch_resource(self, resource: NationBuilderResource, **kwargs) -> Table:
-        if resource not in get_args(NationBuilderResource):
+        if kwargs.get("debug", False) and resource not in get_args(NationBuilderResource):
             raise ValueError(f"'{resource}' is not a vaild resource")
         if hasattr(self, f"fetch_{resource}"):
             return getattr(self,f"fetch_{resource}")(**kwargs)

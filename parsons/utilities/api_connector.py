@@ -55,6 +55,7 @@ class APIConnector:
         data_key: str | None = None,
         as_session: bool | None = None,
         default_timeout: int | None = 20,
+        limiter = None
     ) -> None:
         # Add a trailing slash if its missing
         if not uri.endswith("/"):
@@ -70,12 +71,13 @@ class APIConnector:
         self.uri: str = uri
         self.pagination_key: str | None = pagination_key
         self.data_key: str | None = data_key
+        self.limiter = limiter
 
         if self.as_session:
             retries = Retry(
                 total=3, backoff_factor=1, allowed_methods={"HEAD", "GET", "PUT", "DELETE", "PATCH"}
             )
-            adapter = HTTPAdapter(max_retries=retries, pool_connections=30, pool_maxsize=30)
+            adapter = HTTPAdapter(max_retries=retries, pool_connections=15, pool_maxsize=20)
 
             self.session = Session()
             self.session.mount(prefix="https://", adapter=adapter)
@@ -125,6 +127,9 @@ class APIConnector:
         """
         full_url: str = urllib.parse.urljoin(base=self.uri, url=url)
 
+        if self.limiter is not None:
+            self.limiter.wait()
+
         if self.as_session:
             req_timeout: int | None = timeout if timeout is not None else self.default_timeout
             return self.session.request(
@@ -146,7 +151,7 @@ class APIConnector:
             timeout=timeout,  #! Since we've added a `timeout` parameter, it can be used here
         )
 
-    def get_request(self, url: str, params: dict | None = None, return_format: str = "json"):
+    def get_request(self, url: str, params: dict | None = None, return_format: str = "json", raw_resp: bool = False):
         """
         Make a GET request.
 
@@ -161,6 +166,9 @@ class APIConnector:
                 A requests response object
         """
         r: Response = self.request(url=url, req_type="GET", params=params)
+
+        if raw_resp:
+            return r
 
         self.validate_response(resp=r)
 
@@ -179,6 +187,7 @@ class APIConnector:
         data: str | dict | bytes | None = None,
         json: dict | None = None,
         success_codes: int | list[int] | None = None,
+        raw_resp: bool = False
     ) -> dict | int | None:
         """
         Make a POST request.
@@ -203,6 +212,8 @@ class APIConnector:
             success_codes = [success_codes]
 
         r: Response = self.request(url=url, req_type="POST", params=params, data=data, json=json)
+        if raw_resp:
+            return r
 
         # Validate the response and lift up an errors.
         self.validate_response(resp=r)
@@ -216,7 +227,7 @@ class APIConnector:
                 return r.status_code
 
     def delete_request(
-        self, url: str, params: dict | None = None, success_codes: int | list[int] | None = None
+        self, url: str, params: dict | None = None, success_codes: int | list[int] | None = None, raw_resp: bool = False
     ) -> dict | int | None:
         """
         Make a DELETE request.
@@ -237,6 +248,8 @@ class APIConnector:
             success_codes = [success_codes]
 
         r: Response = self.request(url=url, req_type="DELETE", params=params)
+        if raw_resp:
+            return r
 
         self.validate_response(resp=r)
 
@@ -255,6 +268,7 @@ class APIConnector:
         json: dict | None = None,
         params: dict | None = None,
         success_codes: int | list[int] | None = None,
+        raw_resp: bool = False
     ) -> dict | int | None:
         """
         Make a PUT request.
@@ -279,6 +293,8 @@ class APIConnector:
             success_codes = [success_codes]
 
         r: Response = self.request(url=url, req_type="PUT", params=params, data=data, json=json)
+        if raw_resp:
+            return r
 
         self.validate_response(resp=r)
 
@@ -295,6 +311,7 @@ class APIConnector:
         data: str | dict | bytes | None = None,
         json: dict | None = None,
         success_codes: int | list[int] | None = None,
+        raw_resp: bool = False
     ) -> dict | int | None:
         """
         Make a PATCH request.
@@ -319,6 +336,8 @@ class APIConnector:
             success_codes = [success_codes]
 
         r: Response = self.request(url=url, req_type="PATCH", params=params, data=data, json=json)
+        if raw_resp:
+            return r
 
         self.validate_response(resp=r)
 
